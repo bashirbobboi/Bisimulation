@@ -1,0 +1,17 @@
+# Number of states
+3
+
+# Transition matrix (each row space-separated)
+0.5 0.5 0.0
+0.0 0.5 0.5
+0.0 0.0 1.0
+
+# Terminating states (one per line)
+0
+0
+1
+
+# Transition labels (each line: FROM TO LABEL)
+1 2 move
+2 2 loop
+2 3 exit

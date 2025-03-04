@@ -6,51 +6,12 @@
 import numpy as np
 from graphviz import Digraph
 
-def input_probabilistic_transition_system(filename=None, use_file=True):
+def input_probabilistic_transition_system():
     """
-    Reads the transition matrix, terminating states, and transition labels from a file if use_file=True.
-    Otherwise, it reads input from the command line.
-    """
-    if use_file and filename:
-        with open(filename, "r") as f:
-            lines = [line.strip() for line in f.readlines() if line.strip() and not line.startswith("#")]
-
-        # Read the number of states
-        num_states = int(lines[0])
-
-        # Read the transition matrix
-        matrix = []
-        for i in range(1, num_states + 1):
-            row = list(map(float, lines[i].split()))
-            if len(row) != num_states:
-                raise ValueError(f"State {i} must have exactly {num_states} values.")
-            if abs(sum(row) - 1) > 1e-6:
-                raise ValueError(f"State {i} must sum to 1.")
-            matrix.append(row)
-
-        # Read terminating states
-        terminating_vector = list(map(int, lines[num_states + 1:num_states + 1 + num_states]))
-
-        # Read transition labels
-        transition_labels = {}
-        for line in lines[num_states + 1 + num_states:]:
-            parts = line.split()
-            if len(parts) == 3:
-                from_state, to_state, label = int(parts[0]) - 1, int(parts[1]) - 1, parts[2]
-                transition_labels[(from_state, to_state)] = label
-
-        return np.array(matrix), np.array(terminating_vector), transition_labels
-
-    else:
-        # Fallback to command-line input
-        return input_probabilistic_transition_system_commandline()
-
-def input_probabilistic_transition_system_commandline():
-    """
-    Fallback: Reads input from the command line.
+    Input the transition matrix, terminating states, and transition labels.
     """
     num_states = int(input("Enter the number of states: "))
-
+    
     print("Enter the transition matrix row by row (space-separated, each row must sum to 1):")
     matrix = []
     for i in range(num_states):
@@ -72,7 +33,7 @@ def input_probabilistic_transition_system_commandline():
 
     # Input transition labels
     print("Enter a label for each nonzero transition (e.g., 'a, b', 'click, reset'):")
-    transition_labels = {}
+    transition_labels = {}  # Dictionary to store labeled transitions
     for i in range(num_states):
         for j in range(num_states):
             if matrix[i][j] > 0:
@@ -172,9 +133,9 @@ def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, 
     return minimized_T, minimized_labels
 
 
-def visualize_probabilistic_transition_system(matrix, terminating_classes, transition_labels, filename):
+def visualize_probabilistic_transition_system(matrix, terminating_classes, minimized_labels, filename):
     """
-    Visualize the Probabilistic Transition System (PTS) with correct label formatting.
+    Visualize the Probabilistic Transition System (PTS).
     """
     dot = Digraph(format='png')
 
@@ -186,26 +147,16 @@ def visualize_probabilistic_transition_system(matrix, terminating_classes, trans
             dot.node(f"Class {i}", f"Class {i}", shape='circle', style='filled', color='lightgreen')  
 
     # Add edges with transition probabilities and labels
-    for (i, j), label in transition_labels.items():
+    for (i, j), actions in minimized_labels.items():
         prob = matrix[i][j]
-        
-        # Ensure label is treated correctly (single string or list of strings)
-        if isinstance(label, str):  # If it's a string, use as is
-            label_text = label
-        elif isinstance(label, list):  # If it's a list, join properly
-            label_text = ", ".join(label)
-        else:  # Fallback conversion
-            label_text = str(label)
-
-        dot.edge(f"Class {i}", f"Class {j}", label=f"{label_text} ({prob:.2f})")
+        action_labels = ", ".join(actions)  # Combine multiple actions if needed
+        dot.edge(f"Class {i}", f"Class {j}", label=f"{action_labels} ({prob:.2f})")
 
     dot.render(filename, view=True)
 
 if __name__ == "__main__":
     # Step 1: Input the Probabilistic Transition System
-    filename = input("Enter the filename for input data: ").strip()
-    
-    transition_matrix, terminating_vector, transition_labels = input_probabilistic_transition_system(filename=filename, use_file=True)
+    transition_matrix, terminating_vector, transition_labels = input_probabilistic_transition_system()
     num_states = len(transition_matrix)
 
     # Step 2: Compute Initial Relation R_0
