@@ -1,10 +1,6 @@
 digraph {
 	"Class 0" [color=lightgreen shape=circle style=filled]
-	"Class 1" [color=lightgreen shape=circle style=filled]
-	"Class 2" [color=lightgreen shape=circle style=filled]
+	"Class 1" [color=lightblue peripheries=2 shape=circle style=filled]
 	"Class 0" -> "Class 0" [label=1.00]
 	"Class 1" -> "Class 1" [label=1.00]
-	"Class 2" -> "Class 0" [label=0.40]
-	"Class 2" -> "Class 1" [label=0.30]
-	"Class 2" -> "Class 2" [label=0.30]
 }
