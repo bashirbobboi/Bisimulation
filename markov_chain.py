@@ -1,49 +1,37 @@
 # Author: Mohammed Bashir Ahmed Bobboi 
-# This is the working version 
-# Last Updated: 12th February 2025
-# Last Update Made: Added the Bismulation Algorithm (from my pseudocode)
+# This is the markov chain version 
+# Last Updated: 4th March 2025
+# Last Update Made: Added terminating states to the minimized class
 
 import numpy as np
 from graphviz import Digraph
 
-def input_probabilistic_transition_system():
+def input_markov_chain():
     """
-    Input the transition matrix, terminating states, and transition labels.
+    Input the transition matrix and terminating states.
     """
     num_states = int(input("Enter the number of states: "))
-    
     print("Enter the transition matrix row by row (space-separated, each row must sum to 1):")
+    
     matrix = []
     for i in range(num_states):
-        row = list(map(float, input(f"State {i + 1}: ").split()))
+        row = list(map(float, input(f"Row {i + 1}: ").split()))
         if len(row) != num_states:
-            raise ValueError(f"State {i + 1} must have exactly {num_states} values.")
+            raise ValueError(f"Row {i + 1} must have exactly {num_states} values.")
         if abs(sum(row) - 1) > 1e-6:
-            raise ValueError(f"State {i + 1} must sum to 1.")
+            raise ValueError(f"Row {i + 1} must sum to 1.")
         matrix.append(row)
-
-    # Input terminating states
+    
+    # Input terminating states as a column vector
     print("Enter a column vector (0s and 1s) to indicate which states are terminating:")
     terminating_vector = []
     for i in range(num_states):
-        val = int(input(f"Is state {i + 1} terminating? (1 for yes, 0 for no): "))  # Start from 1
+        val = int(input(f"Is state {i + 1} terminating? (1 for yes, 0 for no): "))  # Start counting from 1
         if val not in [0, 1]:
             raise ValueError("Only 0 or 1 is allowed.")
         terminating_vector.append(val)
-
-    # Input transition labels
-    print("Enter a label for each nonzero transition (e.g., 'click', 'reset'):")
-    transition_labels = {}  # Dictionary to store labeled transitions
-    for i in range(num_states):
-        for j in range(num_states):
-            if matrix[i][j] > 0:
-                label = input(f"Enter label for transition from State {i + 1} to State {j + 1} (or press Enter to skip): ").strip()
-                if label:
-                    transition_labels[(i, j)] = label
-
-    return np.array(matrix), np.array(terminating_vector), transition_labels
-
-
+    
+    return np.array(matrix), np.array(terminating_vector)
 
 def refine_relation(R, transition_matrix, terminating_vector):
     """
@@ -109,10 +97,12 @@ def compute_equivalence_classes(R, num_states, terminating_vector):
     return equivalence_classes, state_class_map, class_termination_status
 
 
-def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels):
+def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map):
+    """
+    Compute the minimized transition matrix using the equivalence classes.
+    """
     num_classes = len(equivalence_classes)
     minimized_T = np.zeros((num_classes, num_classes))
-    minimized_labels = {}  # Store transition labels for the minimized system
 
     for class_id, class_states in equivalence_classes.items():
         for x in class_states:
@@ -121,40 +111,31 @@ def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, 
                     target_class = state_class_map[y]
                     minimized_T[class_id, target_class] += transition_matrix[x, y] / len(class_states)
 
-                    # Preserve transition labels
-                    if (x, y) in transition_labels:
-                        action = transition_labels[(x, y)]
-                        if (class_id, target_class) not in minimized_labels:
-                            minimized_labels[(class_id, target_class)] = set()
-                        minimized_labels[(class_id, target_class)].add(action)
+    return minimized_T
 
-    return minimized_T, minimized_labels
-
-
-def visualize_minimized_probabilistic_transition_system(matrix, terminating_classes, minimized_labels, filename):
+def visualize_markov_chain(matrix, state_names, terminating_status, filename):
     """
-    Visualize the Minimized Probabilistic Transition System (PTS).
+    Visualize a Markov chain using Graphviz.
     """
     dot = Digraph(format='png')
 
     # Add nodes
-    for i in range(len(matrix)):
-        if terminating_classes[i]:
-            dot.node(f"Class {i}", f"Class {i}", shape='circle', style='filled', peripheries='2', color='lightblue')  
+    for i, state in enumerate(state_names):
+        if terminating_status[i]:  # Use class termination status
+            dot.node(state, shape='circle', style='filled', peripheries='2', color='lightblue')  # Double circle for terminating
         else:
-            dot.node(f"Class {i}", f"Class {i}", shape='circle', style='filled', color='lightgreen')  
-
-    # Add edges with transition probabilities and labels
-    for (i, j), actions in minimized_labels.items():
-        prob = matrix[i][j]
-        action_labels = ", ".join(actions)  # Combine multiple actions if needed
-        dot.edge(f"Class {i}", f"Class {j}", label=f"{action_labels} ({prob:.2f})")
+            dot.node(state, shape='circle', style='filled', color='lightgreen')  # Single circle for normal states
+    
+    # Add edges
+    for i, state_from in enumerate(state_names):
+        for j, state_to in enumerate(state_names):
+            if matrix[i][j] > 0:
+                dot.edge(state_from, state_to, label=f"{matrix[i][j]:.2f}")
 
     dot.render(filename, view=True)
 
 if __name__ == "__main__":
-    # Step 1: Input the Probabilistic Transition System
-    transition_matrix, terminating_vector, transition_labels = input_probabilistic_transition_system()
+    transition_matrix, terminating_vector = input_markov_chain()
     num_states = len(transition_matrix)
 
     # Step 2: Compute Initial Relation R_0
@@ -166,12 +147,15 @@ if __name__ == "__main__":
     # Step 4: Compute Equivalence Classes and Termination Status
     equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, num_states, terminating_vector)
 
-    # Step 5: Compute Minimized Transition Matrix (Now with Labels)
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels)
+    # Step 5: Compute Minimized Transition Matrix
+    minimized_T = compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map)
 
     # Step 6: Visualization
-    visualize_minimized_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS")
-    visualize_minimized_probabilistic_transition_system(minimized_T, class_termination_status, minimized_labels, "minimized_PTS")
+    original_state_names = [f"State {i}" for i in range(num_states)]
+    visualize_markov_chain(transition_matrix, original_state_names, terminating_vector, "original_markov_chain")
+
+    minimized_state_names = [f"Class {i}" for i in range(len(equivalence_classes))]
+    visualize_markov_chain(minimized_T, minimized_state_names, class_termination_status, "minimized_markov_chain")
 
     print("\nOriginal Transition Matrix:")
     print(transition_matrix)
@@ -182,7 +166,3 @@ if __name__ == "__main__":
 
     print("\nMinimized Transition Matrix:")
     print(minimized_T)
-
-    print("\nMinimized Transition Labels:")
-    for (i, j), actions in minimized_labels.items():
-        print(f"Class {i} → Class {j}: {', '.join(actions)}")
