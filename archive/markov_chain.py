@@ -2,6 +2,7 @@
 # This is the markov chain version 
 # Last Updated: 4th March 2025
 # Last Update Made: Added terminating states to the minimized class
+# Status: Archived
 
 import numpy as np
 from graphviz import Digraph

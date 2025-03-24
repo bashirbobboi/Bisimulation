@@ -1,7 +1,8 @@
 # Author: Mohammed Bashir Ahmed Bobboi 
 # This is the working version 
-# Last Updated: 12th February 2025
-# Last Update Made: Added the Bismulation Algorithm (from my pseudocode)
+# Last Updated: 4th March 2025
+# Last Update Made: Added Reading from Command Line
+# Status: Archived
 
 import numpy as np
 from graphviz import Digraph
