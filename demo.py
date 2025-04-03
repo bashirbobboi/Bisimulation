@@ -6,6 +6,8 @@
 
 import numpy as np
 from graphviz import Digraph
+from scipy.optimize import linprog
+
 
 def input_probabilistic_transition_system(filename=None, use_file=True):
     """
@@ -82,6 +84,41 @@ def input_probabilistic_transition_system_commandline():
                     transition_labels[(i, j)] = label
 
     return np.array(matrix), np.array(terminating_vector), transition_labels
+
+def compute_kantorovich_distance(P, Q, D):
+    """
+    Solves the Kantorovich LP between two probability distributions P and Q,
+    using D as the current ground distance matrix.
+    """
+    n = len(P)
+    c = D.flatten()
+
+    A_eq = []
+    b_eq = []
+
+    # Row sums = P
+    for i in range(n):
+        row = np.zeros((n, n))
+        row[i, :] = 1
+        A_eq.append(row.flatten())
+        b_eq.append(P[i])
+
+    # Column sums = Q
+    for j in range(n):
+        col = np.zeros((n, n))
+        col[:, j] = 1
+        A_eq.append(col.flatten())
+        b_eq.append(Q[j])
+
+    bounds = [(0, None)] * (n * n)
+
+    result = linprog(c=c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
+
+    if result.success:
+        return result.fun
+    else:
+        raise RuntimeError("Kantorovich LP failed.")
+
 
 
 
@@ -202,6 +239,36 @@ def visualize_probabilistic_transition_system(matrix, terminating_classes, trans
 
     dot.render(filename, view=True)
 
+def compute_distance_matrix(T, Term, epsilon=1e-4, max_iter=50):
+    """
+    Computes the bisimulation distance matrix using fixed-point iteration.
+    """
+    n = len(T)
+    D = np.zeros((n, n))
+
+    # Step 1: Initialize
+    for x in range(n):
+        for y in range(n):
+            if Term[x] != Term[y]:
+                D[x][y] = 1  # Max dissimilarity
+
+    for _ in range(max_iter):
+        new_D = np.copy(D)
+        for x in range(n):
+            for y in range(n):
+                if Term[x] != Term[y]:
+                    continue
+                P = T[x]
+                Q = T[y]
+                new_D[x][y] = compute_kantorovich_distance(P, Q, D)
+
+        if np.max(np.abs(new_D - D)) < epsilon:
+            break
+        D = new_D
+
+    return D
+
+
 if __name__ == "__main__":
     # Step 1: Input the Probabilistic Transition System
     filename = input("Enter the filename for input data: ").strip()
@@ -239,4 +306,9 @@ if __name__ == "__main__":
     print("\nMinimized Transition Labels:")
     for (i, j), actions in minimized_labels.items():
         print(f"Class {i} → Class {j}: {', '.join(actions) if actions else 'No Label'}")
+
+    print("\nComputing Distance Matrix using Kantorovich Metric...")
+    distance_matrix = compute_distance_matrix(transition_matrix, terminating_vector)
+    print("\nDistance Matrix:")
+    print(np.round(distance_matrix, 3))
 

@@ -1,44 +1,35 @@
 # Bisimulation
 This is for my probabilistic bisimulation dissertation project
 
-# Algorithm for Bisimulation
-Input: 
-  - Transition matrix T representing the Markov chain
-  - Set of states X (state space)
+# Algorithm for Computing Distance
+Input:
+    - Transition matrix T where T[x][·] gives the distribution over next states from x
+    - Set of states X (state space)
+    - Ground distance function d₀(x, y) (e.g., 0 if x = y, 1 otherwise)
 
 Output:
-  - Minimized transition matrix T_min
-  - Equivalence classes of states (modulo probabilistic bisimulation)
+    - Distance matrix D where D[x][y] approximates the behavioral distance between states x and y
 
 Algorithm:
+
 1. Initialize:
-   - Let R_0 = X × X (all pairs of states are initially considered equivalent).
-   - Set n = 0.
+    - For all states x, y in X:
+        D₀[x][y] ← d₀(x, y)      # Initial distance (e.g., 0 if x = y, 1 otherwise)
+    - Set n ← 0
 
-2. Define the refinement function f:
-   - For a relation R ⊆ X × X, define:
-     f(R) = {(x, y) | 
-               (i) ∀z ∈ X: t(x, [z]_R) = t(y, [z]_R)
-               (ii) x terminates ⇔ y terminates
-            }
-     where t(x, [z]_R) is the total transition probability from x to the equivalence class [z] under R.
+2. Define update rule for behavioral distance:
+    - For every pair of states x, y ∈ X:
+        D_{n+1}[x][y] ← Wasserstein_Distance(T[x], T[y], ground_cost = Dₙ)
+        # i.e., solve LP to find minimal cost of coupling between T[x] and T[y]
+        # where the cost of moving from state i to state j is Dₙ[i][j]
 
-3. Iterate to refine R:
-   - Repeat until convergence:
-     a. Compute R_(n+1) = f(R_n).
-     b. If R_(n+1) = R_n (stabilized), break the loop.
-     c. Increment n.
+3. Iterate to convergence:
+    - repeat:
+        a. For all x, y ∈ X:
+              Compute D_{n+1}[x][y] using step 2
+        b. If D_{n+1} == Dₙ:
+              break
+        c. Else:
+              n ← n + 1
 
-4. Construct equivalence classes:
-   - Group states x and y into the same equivalence class if (x, y) ∈ R_n.
-
-5. Compute the minimized transition matrix:
-   - For each equivalence class [C]:
-     a. Compute transitions between equivalence classes:
-        - T_min([C1], [C2]) = ∑_{x ∈ C1, y ∈ C2} T(x, y) / |C1|.
-
-6. Return the minimized system:
-   - Minimized transition matrix T_min.
-   - Equivalence classes.
-
-
+4. Return D = Dₙ as the final bisimulation distance matrix
