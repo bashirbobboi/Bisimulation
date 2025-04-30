@@ -4,7 +4,8 @@
 
 import numpy as np
 from graphviz import Digraph
-from scipy.optimize import liimport matplotlib.pyplot as plt
+from scipy.optimize import linprog
+import matplotlib.pyplot as plt
 import seaborn as sns
 
 def input_probabilistic_transition_system(filename=None, use_file=True):
@@ -130,41 +131,106 @@ def generate_graphviz_source(matrix, terminating_vector, transition_labels):
 
     return dot.source  # This is key!
 
+def visualize_probabilistic_transition_system(matrix, terminating_vector, transition_labels, filename):
+    """
+    Visualize the Probabilistic Transition System (PTS) using Graphviz.
+    
+    Args:
+        matrix (np.ndarray): Transition probability matrix
+        terminating_vector (np.ndarray): Vector indicating terminating states (1) and non-terminating states (0)
+        transition_labels (dict): Dictionary mapping (from_state, to_state) tuples to transition labels
+        filename (str): Name of the output file (without extension)
+    """
+    dot = Digraph(format='png')
+    
+    # Add nodes
+    for i in range(len(matrix)):
+        node_label = f"State {i}"
+        if terminating_vector[i]:
+            dot.node(node_label, node_label, shape='circle', style='filled', 
+                    peripheries='2', color='lightblue')
+        else:
+            dot.node(node_label, node_label, shape='circle', style='filled', 
+                    color='lightgreen')
+    
+    # Add edges with transition probabilities and labels
+    for (i, j), label in transition_labels.items():
+        prob = matrix[i][j]
+        # Handle different label formats
+        if isinstance(label, str):
+            label_text = label
+        elif isinstance(label, list):
+            label_text = ", ".join(label)
+        else:
+            label_text = str(label)
+        
+        dot.edge(f"State {i}", f"State {j}", 
+                label=f"{label_text} ({prob:.2f})")
+    
+    dot.render(filename, view=True)
 
 def visualize_distance_matrix(distance_matrix, filename="distance_matrix"):
+    """
+    Create a heatmap visualization of the distance matrix.
+    
+    Args:
+        distance_matrix (np.ndarray): Matrix of bisimulation distances
+        filename (str): Name of the output file (without extension)
+    """
     plt.figure(figsize=(10, 8))
     sns.heatmap(distance_matrix, annot=True, cmap="YlOrRd", fmt=".3f",
-                xticklabels=[f"State {i+1}" for i in range(len(distance_matrix))],
-                yticklabels=[f"State {i+1}" for i in range(len(distance_matrix))])
+                xticklabels=[f"State {i}" for i in range(len(distance_matrix))],
+                yticklabels=[f"State {i}" for i in range(len(distance_matrix))])
     plt.title("Bisimulation Distance Matrix")
     plt.tight_layout()
     plt.savefig(f"{filename}.png")
     plt.close()
 
-if __name__ == "__main__":
-    filename = input("Enter the filename for input data: ").strip()
-    transition_matrix, terminating_vector, transition_labels = input_probabilistic_transition_system(filename=filename, use_file=True)
-    distance_matrix = bisimulation_distance_matrix(transition_matrix, terminating_vector)
-
-    print("\nBisimulation Distance Matrix:")
-    print(np.round(distance_matrix, 3))
-
-    # Visualize both the PTS and the distance matrix
-    visualize_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS")
-    visualize_distance_matrix(distance_matrix, "distance_matrix")
-
-    # Print some analysis
+def analyze_distances(distance_matrix):
+    """
+    Analyze and print statistics about the distance matrix.
+    
+    Args:
+        distance_matrix (np.ndarray): Matrix of bisimulation distances
+    """
     print("\nAnalysis:")
     print(f"Minimum distance: {np.min(distance_matrix):.3f}")
     print(f"Maximum distance: {np.max(distance_matrix):.3f}")
     print(f"Average distance: {np.mean(distance_matrix):.3f}")
     
-    # Find most similar and most different states
-    np.fill_diagonal(distance_matrix, np.inf)  # Ignore diagonal
-    min_idx = np.unravel_index(np.argmin(distance_matrix), distance_matrix.shape)
-    max_idx = np.unravel_index(np.argmax(distance_matrix), distance_matrix.shape)
-    print(f"\nMost similar states: {min_idx[0]+1} and {min_idx[1]+1} (distance: {distance_matrix[min_idx]:.3f})")
-    print(f"Most different states: {max_idx[0]+1} and {max_idx[1]+1} (distance: {distance_matrix[max_idx]:.3f})")
-ce_matrix, 3))
+    # Find most similar and most different states (excluding self-distances)
+    dist_copy = distance_matrix.copy()
+    np.fill_diagonal(dist_copy, np.inf)
+    min_idx = np.unravel_index(np.argmin(dist_copy), dist_copy.shape)
+    max_idx = np.unravel_index(np.argmax(dist_copy), dist_copy.shape)
+    
+    print(f"\nMost similar states: {min_idx[0]} and {min_idx[1]} "
+          f"(distance: {dist_copy[min_idx]:.3f})")
+    print(f"Most different states: {max_idx[0]} and {max_idx[1]} "
+          f"(distance: {dist_copy[max_idx]:.3f})")
 
-    visualize_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS")
+if __name__ == "__main__":
+    try:
+        filename = input("Enter the filename for input data: ").strip()
+        transition_matrix, terminating_vector, transition_labels = input_probabilistic_transition_system(
+            filename=filename, use_file=True)
+        
+        distance_matrix = bisimulation_distance_matrix(transition_matrix, terminating_vector)
+        
+        print("\nBisimulation Distance Matrix:")
+        print(np.round(distance_matrix, 3))
+        
+        # Generate visualizations
+        visualize_probabilistic_transition_system(transition_matrix, terminating_vector, 
+                                                transition_labels, "original_PTS")
+        visualize_distance_matrix(distance_matrix)
+        
+        # Analyze distances
+        analyze_distances(distance_matrix)
+        
+    except FileNotFoundError:
+        print(f"Error: File '{filename}' not found.")
+    except ValueError as e:
+        print(f"Error: {str(e)}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {str(e)}")
