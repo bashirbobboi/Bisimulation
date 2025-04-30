@@ -1,27 +1,18 @@
 # Author: Mohammed Bashir Ahmed Bobboi 
-# This is the working version 
-# Last Updated: 4th March 2025
-# Last Update Made: Added Reading from file input and optional command line input
-# Status: Active
+# Updated: April 3rd, 2025
+# Description: Computes bisimulation distances using Wasserstein metric via LP
 
 import numpy as np
 from graphviz import Digraph
-from scipy.optimize import linprog
-
+from scipy.optimize import liimport matplotlib.pyplot as plt
+import seaborn as sns
 
 def input_probabilistic_transition_system(filename=None, use_file=True):
-    """
-    Reads the transition matrix, terminating states, and transition labels from a file if use_file=True.
-    Otherwise, it reads input from the command line.
-    """
     if use_file and filename:
         with open(filename, "r") as f:
             lines = [line.strip() for line in f.readlines() if line.strip() and not line.startswith("#")]
 
-        # Read the number of states
         num_states = int(lines[0])
-
-        # Read the transition matrix
         matrix = []
         for i in range(1, num_states + 1):
             row = list(map(float, lines[i].split()))
@@ -31,10 +22,8 @@ def input_probabilistic_transition_system(filename=None, use_file=True):
                 raise ValueError(f"State {i} must sum to 1.")
             matrix.append(row)
 
-        # Read terminating states
         terminating_vector = list(map(int, lines[num_states + 1:num_states + 1 + num_states]))
 
-        # Read transition labels
         transition_labels = {}
         for line in lines[num_states + 1 + num_states:]:
             parts = line.split()
@@ -45,13 +34,9 @@ def input_probabilistic_transition_system(filename=None, use_file=True):
         return np.array(matrix), np.array(terminating_vector), transition_labels
 
     else:
-        # Fallback to command-line input
         return input_probabilistic_transition_system_commandline()
 
 def input_probabilistic_transition_system_commandline():
-    """
-    Fallback: Reads input from the command line.
-    """
     num_states = int(input("Enter the number of states: "))
 
     print("Enter the transition matrix row by row (space-separated, each row must sum to 1):")
@@ -64,17 +49,14 @@ def input_probabilistic_transition_system_commandline():
             raise ValueError(f"State {i + 1} must sum to 1.")
         matrix.append(row)
 
-    # Input terminating states
     print("Enter a column vector (0s and 1s) to indicate which states are terminating:")
     terminating_vector = []
     for i in range(num_states):
-        val = int(input(f"Is state {i + 1} terminating? (1 for yes, 0 for no): "))  # Start from 1
+        val = int(input(f"Is state {i + 1} terminating? (1 for yes, 0 for no): "))
         if val not in [0, 1]:
             raise ValueError("Only 0 or 1 is allowed.")
         terminating_vector.append(val)
 
-    # Input transition labels
-    print("Enter a label for each nonzero transition (e.g., 'a, b', 'click, reset'):")
     transition_labels = {}
     for i in range(num_states):
         for j in range(num_states):
@@ -85,230 +67,104 @@ def input_probabilistic_transition_system_commandline():
 
     return np.array(matrix), np.array(terminating_vector), transition_labels
 
-def compute_kantorovich_distance(P, Q, D):
-    """
-    Solves the Kantorovich LP between two probability distributions P and Q,
-    using D as the current ground distance matrix.
-    """
-    n = len(P)
-    c = D.flatten()
-
+def wasserstein_distance(p, q, C):
+    n, m = len(p), len(q)
+    c = C.flatten()
     A_eq = []
     b_eq = []
 
-    # Row sums = P
     for i in range(n):
-        row = np.zeros((n, n))
-        row[i, :] = 1
-        A_eq.append(row.flatten())
-        b_eq.append(P[i])
+        row = np.zeros(n * m)
+        row[i * m:(i + 1) * m] = 1
+        A_eq.append(row)
+        b_eq.append(p[i])
 
-    # Column sums = Q
-    for j in range(n):
-        col = np.zeros((n, n))
-        col[:, j] = 1
-        A_eq.append(col.flatten())
-        b_eq.append(Q[j])
+    for j in range(m):
+        col = np.zeros(n * m)
+        for i in range(n):
+            col[i * m + j] = 1
+        A_eq.append(col)
+        b_eq.append(q[j])
 
-    bounds = [(0, None)] * (n * n)
-
-    result = linprog(c=c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method='highs')
-
-    if result.success:
-        return result.fun
+    bounds = [(0, None)] * (n * m)
+    res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
+    if res.success:
+        return res.fun
     else:
-        raise RuntimeError("Kantorovich LP failed.")
+        raise ValueError("Wasserstein LP did not converge: " + res.message)
 
-
-
-
-def refine_relation(R, transition_matrix, terminating_vector):
-    """
-    Apply the refinement function to iteratively reduce the relation R.
-    """
-    num_states = len(transition_matrix)
-    
-    def transition_prob(x, equivalence_classes):
-        """
-        Compute transition probabilities to equivalence classes.
-        """
-        return {class_id: sum(transition_matrix[x, y] for y in equivalence_classes[class_id])
-                for class_id in equivalence_classes}
-    
-    while True:
-        new_R = set()
-        equivalence_classes = {i: {j for j in range(num_states) if (i, j) in R} for i in range(num_states)}
-
-        for x in range(num_states):
-            for y in range(num_states):
-                if (x, y) in R:
-                    # Check transition probability condition
-                    x_trans = transition_prob(x, equivalence_classes)
-                    y_trans = transition_prob(y, equivalence_classes)
-                    
-                    if x_trans != y_trans or terminating_vector[x] != terminating_vector[y]:
-                        continue  # (x, y) is removed if conditions are not met
-                    
-                    new_R.add((x, y))
-
-        if new_R == R:  # If R stabilizes, stop
-            break
-        R = new_R
-
-    return R
-
-def compute_equivalence_classes(R, num_states, terminating_vector):
-    """
-    Construct equivalence classes from the final bisimulation relation.
-    Determine if an equivalence class is terminating.
-    """
-    equivalence_classes = {}
-    state_class_map = {}
-    class_termination_status = {}
-
-    for x in range(num_states):
-        found = False
-        for class_id, class_states in equivalence_classes.items():
-            if (x, next(iter(class_states))) in R:  # If x is related to an existing class
-                equivalence_classes[class_id].add(x)
-                state_class_map[x] = class_id
-                found = True
-                break
-        if not found:
-            new_class_id = len(equivalence_classes)
-            equivalence_classes[new_class_id] = {x}
-            state_class_map[x] = new_class_id
-
-    # Determine which equivalence classes are terminating
-    for class_id, class_states in equivalence_classes.items():
-        class_termination_status[class_id] = any(terminating_vector[state] == 1 for state in class_states)
-
-    return equivalence_classes, state_class_map, class_termination_status
-
-
-def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels):
-    num_classes = len(equivalence_classes)
-    minimized_T = np.zeros((num_classes, num_classes))
-    minimized_labels = {}  # Store transition labels for the minimized system
-
-    for class_id, class_states in equivalence_classes.items():
-        for x in class_states:
-            for y in range(len(transition_matrix)):
-                if transition_matrix[x, y] > 0:
-                    target_class = state_class_map[y]
-                    minimized_T[class_id, target_class] += transition_matrix[x, y] / len(class_states)
-
-                    # Preserve transition labels
-                    if (x, y) in transition_labels:
-                        action = transition_labels[(x, y)]
-                        if (class_id, target_class) not in minimized_labels:
-                            minimized_labels[(class_id, target_class)] = []
-                        if action not in minimized_labels[(class_id, target_class)]:  # Prevent duplicates
-                            minimized_labels[(class_id, target_class)].append(action)
-
-
-    return minimized_T, minimized_labels
-
-
-def visualize_probabilistic_transition_system(matrix, terminating_classes, transition_labels, filename):
-    """
-    Visualize the Probabilistic Transition System (PTS) with correct label formatting.
-    """
-    dot = Digraph(format='png')
-
-    # Add nodes
-    for i in range(len(matrix)):
-        if terminating_classes[i]:
-            dot.node(f"Class {i}", f"Class {i}", shape='circle', style='filled', peripheries='2', color='lightblue')  
-        else:
-            dot.node(f"Class {i}", f"Class {i}", shape='circle', style='filled', color='lightgreen')  
-
-    # Add edges with transition probabilities and labels
-    for (i, j), label in transition_labels.items():
-        prob = matrix[i][j]
-        
-        # Ensure label is treated correctly (single string or list of strings)
-        if isinstance(label, str):  # If it's a string, use as is
-            label_text = label
-        elif isinstance(label, list):  # If it's a list, join properly
-            label_text = ", ".join(label)
-        else:  # Fallback conversion
-            label_text = str(label)
-
-        dot.edge(f"Class {i}", f"Class {j}", label=f"{label_text} ({prob:.2f})")
-
-    dot.render(filename, view=True)
-
-def compute_distance_matrix(T, Term, epsilon=1e-4, max_iter=50):
-    """
-    Computes the bisimulation distance matrix using fixed-point iteration.
-    """
-    n = len(T)
+def bisimulation_distance_matrix(T, Term, max_iter=100):
+    n = T.shape[0]
     D = np.zeros((n, n))
-
-    # Step 1: Initialize
-    for x in range(n):
-        for y in range(n):
-            if Term[x] != Term[y]:
-                D[x][y] = 1  # Max dissimilarity
+    for i in range(n):
+        for j in range(n):
+            D[i][j] = 0 if Term[i] == Term[j] else 1
 
     for _ in range(max_iter):
-        new_D = np.copy(D)
+        D_new = np.zeros_like(D)
         for x in range(n):
             for y in range(n):
                 if Term[x] != Term[y]:
-                    continue
-                P = T[x]
-                Q = T[y]
-                new_D[x][y] = compute_kantorovich_distance(P, Q, D)
-
-        if np.max(np.abs(new_D - D)) < epsilon:
+                    D_new[x][y] = 1.0
+                else:
+                    D_new[x][y] = wasserstein_distance(T[x], T[y], D)
+        if np.array_equal(D_new, D):
             break
-        D = new_D
-
+        D = D_new
     return D
 
+def generate_graphviz_source(matrix, terminating_vector, transition_labels):
+    dot = Digraph()
+    for i in range(len(matrix)):
+        label = f"State {i}"
+        style = {'shape': 'circle'}
+        if terminating_vector[i]:
+            dot.node(label, label, shape='circle', color='lightblue', style='filled', peripheries='2')
+        else:
+            dot.node(label, label, shape='circle', color='lightgreen', style='filled')
+
+    for (i, j), label in transition_labels.items():
+        prob = matrix[i][j]
+        label_text = label if isinstance(label, str) else ", ".join(label)
+        dot.edge(f"State {i}", f"State {j}", label=f"{label_text} ({prob:.2f})")
+
+    return dot.source  # This is key!
+
+
+def visualize_distance_matrix(distance_matrix, filename="distance_matrix"):
+    plt.figure(figsize=(10, 8))
+    sns.heatmap(distance_matrix, annot=True, cmap="YlOrRd", fmt=".3f",
+                xticklabels=[f"State {i+1}" for i in range(len(distance_matrix))],
+                yticklabels=[f"State {i+1}" for i in range(len(distance_matrix))])
+    plt.title("Bisimulation Distance Matrix")
+    plt.tight_layout()
+    plt.savefig(f"{filename}.png")
+    plt.close()
 
 if __name__ == "__main__":
-    # Step 1: Input the Probabilistic Transition System
     filename = input("Enter the filename for input data: ").strip()
-    
     transition_matrix, terminating_vector, transition_labels = input_probabilistic_transition_system(filename=filename, use_file=True)
-    num_states = len(transition_matrix)
+    distance_matrix = bisimulation_distance_matrix(transition_matrix, terminating_vector)
 
-    # Step 2: Compute Initial Relation R_0
-    R_0 = {(x, y) for x in range(num_states) for y in range(num_states)}
-
-    # Step 3: Apply Refinement
-    R_n = refine_relation(R_0, transition_matrix, terminating_vector)
-
-    # Step 4: Compute Equivalence Classes and Termination Status
-    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, num_states, terminating_vector)
-
-    # Step 5: Compute Minimized Transition Matrix (Now with Labels)
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels)
-
-    # Step 6: Visualization
-    visualize_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS")
-    visualize_probabilistic_transition_system(minimized_T, list(class_termination_status.values()), minimized_labels, "minimized_PTS")
-
-
-    print("\nOriginal Transition Matrix:")
-    print(transition_matrix)
-
-    print("\nEquivalence Classes:")
-    for class_id, class_states in equivalence_classes.items():
-        print(f"Class {class_id}: {class_states}, Terminating: {class_termination_status[class_id]}")
-
-    print("\nMinimized Transition Matrix:")
-    print(minimized_T)
-
-    print("\nMinimized Transition Labels:")
-    for (i, j), actions in minimized_labels.items():
-        print(f"Class {i} → Class {j}: {', '.join(actions) if actions else 'No Label'}")
-
-    print("\nComputing Distance Matrix using Kantorovich Metric...")
-    distance_matrix = compute_distance_matrix(transition_matrix, terminating_vector)
-    print("\nDistance Matrix:")
+    print("\nBisimulation Distance Matrix:")
     print(np.round(distance_matrix, 3))
 
+    # Visualize both the PTS and the distance matrix
+    visualize_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS")
+    visualize_distance_matrix(distance_matrix, "distance_matrix")
+
+    # Print some analysis
+    print("\nAnalysis:")
+    print(f"Minimum distance: {np.min(distance_matrix):.3f}")
+    print(f"Maximum distance: {np.max(distance_matrix):.3f}")
+    print(f"Average distance: {np.mean(distance_matrix):.3f}")
+    
+    # Find most similar and most different states
+    np.fill_diagonal(distance_matrix, np.inf)  # Ignore diagonal
+    min_idx = np.unravel_index(np.argmin(distance_matrix), distance_matrix.shape)
+    max_idx = np.unravel_index(np.argmax(distance_matrix), distance_matrix.shape)
+    print(f"\nMost similar states: {min_idx[0]+1} and {min_idx[1]+1} (distance: {distance_matrix[min_idx]:.3f})")
+    print(f"Most different states: {max_idx[0]+1} and {max_idx[1]+1} (distance: {distance_matrix[max_idx]:.3f})")
+ce_matrix, 3))
+
+    visualize_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS")
