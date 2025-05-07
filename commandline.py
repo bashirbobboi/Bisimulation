@@ -174,33 +174,40 @@ def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, 
     return minimized_T, minimized_labels
 
 
-def visualize_probabilistic_transition_system(matrix, terminating_classes, transition_labels, filename):
+def visualize_probabilistic_transition_system(matrix, terminating_classes, transition_labels, filename, is_minimized=False):
     """
     Visualize the Probabilistic Transition System (PTS) with correct label formatting.
+    is_minimized: if True, use "Class" terminology, otherwise use "State"
     """
     dot = Digraph(format='png')
+    prefix = "Class" if is_minimized else "State"
 
     # Add nodes
     for i in range(len(matrix)):
         if terminating_classes[i]:
-            dot.node(f"Class {i}", f"Class {i}", shape='circle', style='filled', peripheries='2', color='lightblue')  
+            dot.node(f"{prefix} {i}", f"{prefix} {i}", shape='circle', style='filled', peripheries='2', color='lightblue')  
         else:
-            dot.node(f"Class {i}", f"Class {i}", shape='circle', style='filled', color='lightgreen')  
+            dot.node(f"{prefix} {i}", f"{prefix} {i}", shape='circle', style='filled', color='lightgreen')  
 
     # Add edges with transition probabilities and labels
     for (i, j), label in transition_labels.items():
+        # Skip drawing outgoing edges from terminating states
+        if terminating_classes[i]:
+            continue
+
         prob = matrix[i][j]
-        
+
         # Ensure label is treated correctly (single string or list of strings)
-        if isinstance(label, str):  # If it's a string, use as is
+        if isinstance(label, str):
             label_text = label
-        elif isinstance(label, list):  # If it's a list, join properly
+        elif isinstance(label, list):
             label_text = ", ".join(label)
-        else:  # Fallback conversion
+        else:
             label_text = str(label)
 
-        dot.edge(f"Class {i}", f"Class {j}", label=f"{label_text} ({prob:.2f})")
+        dot.edge(f"{prefix} {i}", f"{prefix} {j}", label=f"{label_text} ({prob:.2f})")
 
+    # ✅ Ensure rendering and viewing the diagram
     dot.render(filename, view=True)
 
 if __name__ == "__main__":
@@ -223,16 +230,15 @@ if __name__ == "__main__":
     minimized_T, minimized_labels = compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels)
 
     # Step 6: Visualization
-    visualize_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS")
-    visualize_probabilistic_transition_system(minimized_T, list(class_termination_status.values()), minimized_labels, "minimized_PTS")
-
+    visualize_probabilistic_transition_system(transition_matrix, terminating_vector, transition_labels, "original_PTS", is_minimized=False)
+    visualize_probabilistic_transition_system(minimized_T, list(class_termination_status.values()), minimized_labels, "minimized_PTS", is_minimized=True)
 
     print("\nOriginal Transition Matrix:")
     print(transition_matrix)
 
     print("\nEquivalence Classes:")
     for class_id, class_states in equivalence_classes.items():
-        print(f"Class {class_id}: {class_states}, Terminating: {class_termination_status[class_id]}")
+        print(f"Class {class_id}: States {class_states}, Terminating: {class_termination_status[class_id]}")
 
     print("\nMinimized Transition Matrix:")
     print(minimized_T)
