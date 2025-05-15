@@ -2,6 +2,8 @@ import streamlit as st
 import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
+import os
+from pathlib import Path
 from commandline import (
     refine_relation,
     compute_equivalence_classes,
@@ -12,6 +14,10 @@ from demo import (
     bisimulation_distance_matrix,
     generate_graphviz_source
 )
+
+# Create necessary directories if they don't exist
+Path("txt").mkdir(exist_ok=True)
+Path("images").mkdir(exist_ok=True)
 
 st.set_page_config(
     page_title="PTS Bisimulation Tool",
@@ -81,7 +87,7 @@ if input_mode == "Upload File":
     uploaded_file = st.file_uploader("📁 Upload your transition matrix file (.txt)", type="txt")
     if uploaded_file:
         content = uploaded_file.read().decode("utf-8")
-        temp_path = "temp_input.txt"
+        temp_path = os.path.join("txt", "temp_input.txt")
         with open(temp_path, "w") as f:
             f.write(content)
         try:
