@@ -89,7 +89,7 @@ if input_mode == "Upload File":
     if uploaded_file:
         content = uploaded_file.read().decode("utf-8")
         temp_path = os.path.join("txt", "temp_input.txt")
-        with open(temp_path, "w") as f:
+        with open(temp_path, "w", encoding="utf-8") as f:
             f.write(content)
         try:
             T, Term, labels = input_probabilistic_transition_system(filename=temp_path, use_file=True)
@@ -190,7 +190,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
         tab1, tab2, tab3, tab4 = st.tabs([
             "📏 Distance Analysis", 
             "📈 System Analysis", 
-            "🔄 Minimized PTS",
+            "🔄 Minimization",
             "📚 Theory"
         ])
         
@@ -373,27 +373,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
             equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, len(T), Term)
             minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
 
-            # Display equivalence classes
-            st.markdown("#### 📑 Equivalence Classes")
-            for class_id, class_states in equivalence_classes.items():
-                # Convert state numbers to 1-based indexing
-                states_1based = [s + 1 for s in class_states]
-                # Format states list based on number of states
-                if len(states_1based) == 1:
-                    states_str = f"state {states_1based[0]}"
-                else:
-                    states_str = ", ".join(f"state {s}" for s in states_1based[:-1]) + f" & state {states_1based[-1]}"
-                st.write(f"Class {class_id + 1}: {states_str}, Terminating: {class_termination_status[class_id]}")
-
-            # Display minimized transition matrix
-            st.markdown("#### 📊 Minimized Transition Matrix")
-            # Create a DataFrame with 1-based indexing
-            minimized_df = pd.DataFrame(np.round(minimized_T, 3),
-                                     index=[f"Class {i+1}" for i in range(len(minimized_T))],
-                                     columns=[f"Class {i+1}" for i in range(len(minimized_T))])
-            st.dataframe(minimized_df)
-
-            # Create two columns for side-by-side visualization
+            # Show visualizations first
             col1, col2 = st.columns(2)
             
             with col1:
@@ -410,6 +390,127 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                     is_minimized=True
                 )
                 st.graphviz_chart(minimized_graphviz_src)
+
+            # Add bisimulation statistics in an expander
+            with st.expander("📊 Bisimulation Statistics", expanded=True):
+                # Calculate statistics
+                num_classes = len(equivalence_classes)
+                num_states = len(T)
+                compression_ratio = num_classes / num_states
+                
+                # Calculate class size statistics
+                class_sizes = [len(states) for states in equivalence_classes.values()]
+                min_size = min(class_sizes)
+                max_size = max(class_sizes)
+                mean_size = sum(class_sizes) / len(class_sizes)
+                median_size = sorted(class_sizes)[len(class_sizes) // 2]
+                
+                # Create columns for statistics display
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.metric(
+                        "Number of Equivalence Classes",
+                        f"{num_classes}",
+                        help="Total number of equivalence classes after minimization"
+                    )
+                    st.metric(
+                        "Compression Ratio",
+                        f"{compression_ratio:.2%}",
+                        help="Ratio of classes to original states (|Classes| / |S|)"
+                    )
+                
+                with col2:
+                    st.markdown("#### Distribution of Class Sizes")
+                    
+                    # Create metrics in a grid layout
+                    metrics_col1, metrics_col2 = st.columns(2)
+                    
+                    with metrics_col1:
+                        st.metric(
+                            "Smallest Class Size",
+                            min_size,
+                            help="The minimum number of states in any equivalence class"
+                        )
+                        st.metric(
+                            "Largest Class Size",
+                            max_size,
+                            help="The maximum number of states in any equivalence class"
+                        )
+                    
+                    with metrics_col2:
+                        st.metric(
+                            "Average Class Size",
+                            f"{mean_size:.2f}",
+                            help="The mean number of states across all equivalence classes"
+                        )
+                        st.metric(
+                            "Typical Class Size",
+                            median_size,
+                            help="The middle value of class sizes (half of classes are smaller, half are larger)"
+                        )
+                    
+                    # Add interpretation
+                    if max_size > 2 * mean_size:
+                        st.info("The system has some large equivalence classes with many singletons")
+                    else:
+                        st.info("The equivalence classes are relatively uniform in size")
+
+            # Display equivalence classes in an expander
+            with st.expander("📑 Equivalence Classes", expanded=False):
+                # Group classes by termination status
+                terminating_classes = []
+                non_terminating_classes = []
+                
+                for class_id, class_states in equivalence_classes.items():
+                    # Convert state numbers to 1-based indexing
+                    states_1based = [s + 1 for s in class_states]
+                    # Format states list based on number of states
+                    if len(states_1based) == 1:
+                        states_str = f"state {states_1based[0]}"
+                    else:
+                        states_str = ", ".join(f"state {s}" for s in states_1based[:-1]) + f" & state {states_1based[-1]}"
+                    
+                    class_info = {
+                        'id': class_id + 1,
+                        'states': states_str,
+                        'terminating': class_termination_status[class_id]
+                    }
+                    
+                    if class_termination_status[class_id]:
+                        terminating_classes.append(class_info)
+                    else:
+                        non_terminating_classes.append(class_info)
+                
+                # Use tabs instead of nested expanders
+                term_tab, non_term_tab = st.tabs([
+                    f"🔴 Terminating Classes ({len(terminating_classes)})",
+                    f"⚪ Non-Terminating Classes ({len(non_terminating_classes)})"
+                ])
+                
+                with term_tab:
+                    for class_info in terminating_classes:
+                        st.markdown(f"""
+                        <div style='padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin: 5px 0;'>
+                            <strong>Class {class_info['id']}</strong>: {class_info['states']}
+                        </div>
+                        """, unsafe_allow_html=True)
+                
+                with non_term_tab:
+                    for class_info in non_terminating_classes:
+                        st.markdown(f"""
+                        <div style='padding: 10px; background-color: #f0f2f6; border-radius: 5px; margin: 5px 0;'>
+                            <strong>Class {class_info['id']}</strong>: {class_info['states']}
+                        </div>
+                        """, unsafe_allow_html=True)
+
+            # Display minimized transition matrix in an expander
+            with st.expander("📊 Minimized Transition Matrix", expanded=False):
+                # Create a DataFrame with 1-based indexing
+                minimized_df = pd.DataFrame(np.round(minimized_T, 3),
+                                         index=[f"Class {i+1}" for i in range(len(minimized_T))],
+                                         columns=[f"Class {i+1}" for i in range(len(minimized_T))])
+                st.dataframe(minimized_df)
 
         with tab4:
             st.markdown("## 📚 Theoretical Foundations")
