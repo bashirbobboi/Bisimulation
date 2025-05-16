@@ -206,16 +206,184 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                 st.dataframe(df)
 
             st.markdown("#### Distance Heatmap")
-            fig, ax = plt.subplots(figsize=(6, 4))  # Increased figure size
-            sns.heatmap(D, annot=True, cmap="YlOrRd", fmt=".3f",
-                        xticklabels=[f"State {i+1}" for i in range(len(D))],
-                        yticklabels=[f"State {i+1}" for i in range(len(D))],
-                        annot_kws={"size": 8})  # Increased annotation size
-            # Set tick label sizes after creating the heatmap
-            ax.tick_params(axis='both', which='major', labelsize=8)  # Increased tick label size
-            plt.title("Bisimulation Distance Heatmap", pad=8, size=12)  # Increased title size
-            plt.tight_layout()
-            st.pyplot(fig, use_container_width=True)
+            with st.expander("Show Distance Heatmap", expanded=True):
+                fig, ax = plt.subplots(figsize=(6, 4))  # Increased figure size
+                sns.heatmap(D, annot=True, cmap="YlOrRd", fmt=".3f",
+                            xticklabels=[f"State {i+1}" for i in range(len(D))],
+                            yticklabels=[f"State {i+1}" for i in range(len(D))],
+                            annot_kws={"size": 8})  # Increased annotation size
+                # Set tick label sizes after creating the heatmap
+                ax.tick_params(axis='both', which='major', labelsize=8)  # Increased tick label size
+                plt.title("Bisimulation Distance Heatmap", pad=8, size=12)  # Increased title size
+                plt.tight_layout()
+                st.pyplot(fig, use_container_width=True)
+
+
+            st.markdown("#### 📊 Metrics Breakdown")
+            # Add state analysis in expanders
+            with st.expander("🔍 State Analysis", expanded=True):
+                # Find all pairs with minimum and maximum distances
+                D_copy = D.copy()  # Create a copy to avoid modifying the original
+                np.fill_diagonal(D_copy, np.inf)  # Exclude self-comparisons for minimum distance
+                min_distance = np.min(D_copy)
+                
+                # For maximum distance, use the original matrix
+                max_distance = np.max(D)
+                
+                # Find all pairs with minimum distance and filter duplicates
+                min_pairs = np.where(np.abs(D_copy - min_distance) < 1e-10)
+                min_pairs = list(zip(min_pairs[0], min_pairs[1]))
+                # Filter out duplicate pairs (e.g., if (1,2) exists, remove (2,1))
+                min_pairs = [(s1, s2) for s1, s2 in min_pairs if s1 < s2]
+                
+                # Find all pairs with maximum distance and filter duplicates
+                max_pairs = np.where(np.abs(D - max_distance) < 1e-10)
+                max_pairs = list(zip(max_pairs[0], max_pairs[1]))
+                # Filter out duplicate pairs
+                max_pairs = [(s1, s2) for s1, s2 in max_pairs if s1 < s2]
+                
+                # Use tabs for similar and different states
+                similar_tab, different_tab = st.tabs([
+                    f"🎯 Most Similar States ({len(min_pairs)} pairs)",
+                    f"🎯 Most Different States ({len(max_pairs)} pairs)"
+                ])
+                
+                with similar_tab:
+                    if len(min_pairs) == 1:
+                        st.success(f"States S{min_pairs[0][0]+1} and S{min_pairs[0][1]+1} are most similar with distance {min_distance:.3f}")
+                    else:
+                        st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f})")
+                        # Create a table for similar states
+                        similar_data = {
+                            "Pair": [f"{i+1}" for i in range(len(min_pairs))],
+                            "State 1": [f"S{s1+1}" for s1, _ in min_pairs],
+                            "State 2": [f"S{s2+1}" for _, s2 in min_pairs],
+                            "Distance": [f"{min_distance:.3f}" for _ in min_pairs]
+                        }
+                        similar_df = pd.DataFrame(similar_data)
+                        st.dataframe(
+                            similar_df,
+                            hide_index=True,
+                            use_container_width=True
+                        )
+                
+                with different_tab:
+                    if len(max_pairs) == 1:
+                        st.error(f"States S{max_pairs[0][0]+1} and S{max_pairs[0][1]+1} are most different with distance {max_distance:.3f}")
+                    else:
+                        st.error(f"Found {len(max_pairs)} pairs of most different states (distance: {max_distance:.3f})")
+                        # Create a table for different states
+                        different_data = {
+                            "Pair": [f"{i+1}" for i in range(len(max_pairs))],
+                            "First State Pair": [f"S{s1+1}" for s1, _ in max_pairs],
+                            "Second State Pair": [f"S{s2+1}" for _, s2 in max_pairs],
+                            "Distance": [f"{max_distance:.3f}" for _ in max_pairs]
+                        }
+                        different_df = pd.DataFrame(different_data)
+                        st.dataframe(
+                            different_df,
+                            hide_index=True,
+                            use_container_width=True
+                        )
+            with st.expander("Show Distance Metrics", expanded=True):
+                # Calculate basic statistics
+                D_flat = D[np.triu_indices_from(D, k=1)]  # Get upper triangle excluding diagonal
+                min_dist = np.min(D_flat)
+                max_dist = np.max(D_flat)
+                mean_dist = np.mean(D_flat)
+                median_dist = np.median(D_flat)
+                std_dist = np.std(D_flat)
+                
+                # Calculate proportions
+                n = len(D)
+                total_pairs = n * (n-1) / 2  # Number of unique state pairs
+                zero_pairs = np.sum(D_flat == 0)
+                zero_prop = zero_pairs / total_pairs
+                
+                # Display basic statistics
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric(
+                        "Minimum Distance",
+                        f"{min_dist:.3f}",
+                        help="The smallest distance between any two states. A value of 0 indicates exactly bisimilar states."
+                    )
+                    st.metric(
+                        "Mean Distance",
+                        f"{mean_dist:.3f}",
+                        help="The average distance between all state pairs. Indicates the overall level of behavioral similarity in the system."
+                    )
+                    st.metric(
+                        "Standard Deviation",
+                        f"{std_dist:.3f}",
+                        help="Measures how spread out the distances are. A high value indicates states have very different behaviors, while a low value suggests more uniform behavior."
+                    )
+                with col2:
+                    st.metric(
+                        "Maximum Distance",
+                        f"{max_dist:.3f}",
+                        help="The largest distance between any two states. Indicates the most behaviorally different states in the system."
+                    )
+                    st.metric(
+                        "Median Distance",
+                        f"{median_dist:.3f}",
+                        help="The middle value of all distances. Less affected by outliers than the mean, giving a better sense of typical state differences."
+                    )
+                    st.metric(
+                        "Zero Distance Pairs",
+                        f"{zero_pairs} ({zero_prop:.1%})",
+                        help="Number and proportion of state pairs that are exactly bisimilar (distance = 0). These states have identical behavior."
+                    )
+                
+                # Interactive ε threshold analysis
+                st.markdown("### 📊 Proportion Below Threshold Analysis")
+                
+                # Add threshold interpretation guide
+                st.markdown("""
+                #### ℹ️ Understanding Threshold Values
+                The threshold value helps you analyze how similar or different states are. Here's a general guide:
+                
+                - **0.0**: States are exactly bisimilar (identical behavior)
+                - **0.0 - 0.1**: States are very similar in behavior
+                - **0.1 - 0.3**: States show moderate similarity
+                - **0.3 - 0.5**: States show significant differences
+                - **0.5 - 0.8**: States are quite different
+                - **0.8 - 1.0**: States are very different in behavior
+                
+                Note: These ranges are general guidelines. The actual interpretation may vary depending on your specific system.
+                """)
+                
+                epsilon = st.slider(
+                    "Select distance threshold",
+                    min_value=0.0,
+                    max_value=float(max_dist),
+                    value=0.1,
+                    step=0.01,
+                    help="States with distance ≤ threshold are grouped together. This helps analyze how many state pairs fall within different distance ranges."
+                )
+                
+                # Calculate proportion below ε
+                below_epsilon = np.sum(D_flat <= epsilon)
+                below_epsilon_prop = below_epsilon / total_pairs
+                
+                # Display ε analysis
+                st.markdown(f"""
+                #### Analysis for threshold = {epsilon:.3f}
+                - **Exactly Bisimilar States** (distance = 0): {zero_pairs} pairs ({zero_prop:.1%})
+                - **States Below Threshold** (distance ≤ {epsilon:.3f}): {below_epsilon} pairs ({below_epsilon_prop:.1%})
+                - **States Above Threshold** (distance > {epsilon:.3f}): {total_pairs - below_epsilon} pairs ({(1 - below_epsilon_prop):.1%})
+                """)
+                
+                # Visualize distribution
+                fig, ax = plt.subplots(figsize=(8, 4))
+                sns.histplot(D_flat, bins=20, ax=ax)
+                ax.axvline(x=epsilon, color='r', linestyle='--', label=f'Threshold = {epsilon:.3f}')
+                ax.axvline(x=0, color='g', linestyle='--', label='Exactly Bisimilar')
+                ax.set_title('Distribution of State Distances')
+                ax.set_xlabel('Distance')
+                ax.set_ylabel('Number of State Pairs')
+                ax.legend()
+                st.pyplot(fig)
 
 
         with tab2:
@@ -288,81 +456,6 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
             plt.tight_layout()
             
             st.pyplot(fig)
-
-            st.markdown("### 🔍 State Analysis")
-            
-            # Find all pairs with minimum and maximum distances
-            D_copy = D.copy()  # Create a copy to avoid modifying the original
-            np.fill_diagonal(D_copy, np.inf)  # Exclude self-comparisons for minimum distance
-            min_distance = np.min(D_copy)
-            
-            # For maximum distance, use the original matrix
-            max_distance = np.max(D)
-            
-            # Find all pairs with minimum distance and filter duplicates
-            min_pairs = np.where(np.abs(D_copy - min_distance) < 1e-10)
-            min_pairs = list(zip(min_pairs[0], min_pairs[1]))
-            # Filter out duplicate pairs (e.g., if (1,2) exists, remove (2,1))
-            min_pairs = [(s1, s2) for s1, s2 in min_pairs if s1 < s2]
-            
-            # Find all pairs with maximum distance and filter duplicates
-            max_pairs = np.where(np.abs(D - max_distance) < 1e-10)
-            max_pairs = list(zip(max_pairs[0], max_pairs[1]))
-            # Filter out duplicate pairs
-            max_pairs = [(s1, s2) for s1, s2 in max_pairs if s1 < s2]
-            
-            # Create columns for the analysis
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown("#### 🎯 Most Similar States")
-                if len(min_pairs) == 1:
-                    st.success(f"States S{min_pairs[0][0]+1} and S{min_pairs[0][1]+1} are most similar with distance {min_distance:.3f}")
-                else:
-                    st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f}):")
-                    for i, (s1, s2) in enumerate(min_pairs, 1):
-                        st.write(f"{i}. States S{s1+1} and S{s2+1}")
-                
-                # Visualize the most similar states
-                if len(min_pairs) > 0:
-                    fig, ax = plt.subplots(figsize=(6, 4))
-                    similar_states = set()
-                    for s1, s2 in min_pairs:
-                        similar_states.add(s1)
-                        similar_states.add(s2)
-                    
-                    # Create a subgraph of the most similar states
-                    subgraph = T[list(similar_states)][:, list(similar_states)]
-                    sns.heatmap(subgraph, annot=True, cmap="YlGn", fmt=".2f",
-                              xticklabels=[f"S{i+1}" for i in similar_states],
-                              yticklabels=[f"S{i+1}" for i in similar_states])
-                    plt.title("Transition Probabilities\nBetween Most Similar States")
-                    st.pyplot(fig)
-            
-            with col2:
-                st.markdown("#### 🎯 Most Different States")
-                if len(max_pairs) == 1:
-                    st.error(f"States S{max_pairs[0][0]+1} and S{max_pairs[0][1]+1} are most different with distance {max_distance:.3f}")
-                else:
-                    st.error(f"Found {len(max_pairs)} pairs of most different states (distance: {max_distance:.3f}):")
-                    for i, (s1, s2) in enumerate(max_pairs, 1):
-                        st.write(f"{i}. States S{s1+1} and S{s2+1}")
-                
-                # Visualize the most different states
-                if len(max_pairs) > 0:
-                    fig, ax = plt.subplots(figsize=(6, 4))
-                    different_states = set()
-                    for s1, s2 in max_pairs:
-                        different_states.add(s1)
-                        different_states.add(s2)
-                    
-                    # Create a subgraph of the most different states
-                    subgraph = T[list(different_states)][:, list(different_states)]
-                    sns.heatmap(subgraph, annot=True, cmap="YlOrRd", fmt=".2f",
-                              xticklabels=[f"S{i+1}" for i in different_states],
-                              yticklabels=[f"S{i+1}" for i in different_states])
-                    plt.title("Transition Probabilities\nBetween Most Different States")
-                    st.pyplot(fig)
 
         with tab3:
             st.markdown("### 🧠 Probabilistic Transition System Comparison")
