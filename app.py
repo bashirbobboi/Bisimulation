@@ -180,7 +180,13 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
         D = bisimulation_distance_matrix(T, Term)
 
         # Create tabs for different visualizations
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Distance Matrix", "🌡️ Heatmap", "📈 Analysis", "🔄 Minimized PTS"])
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
+            "📊 Distance Matrix", 
+            "🌡️ Heatmap", 
+            "📈 Analysis", 
+            "🔄 Minimized PTS",
+            "📚 Theory"
+        ])
         
         with tab1:
             st.markdown("### Distance Matrix")
@@ -198,18 +204,145 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
 
         with tab3:
             st.markdown("### 📊 Summary Statistics")
+            
+            # Calculate metrics
+            num_states = len(T)
+            num_terminating = sum(Term)
+            num_transitions = sum(sum(row > 0) for row in T)
+            avg_transitions = num_transitions / num_states
+            sparsity = 1 - (num_transitions / (num_states * num_states))  # Sparsity of transition matrix
+            
+            # Create metrics in a grid layout
             col1, col2, col3 = st.columns(3)
-            col1.metric("Minimum Distance", f"{np.min(D):.3f}")
-            col2.metric("Maximum Distance", f"{np.max(D):.3f}")
-            col3.metric("Average Distance", f"{np.mean(D):.3f}")
+            
+            with col1:
+                st.metric(
+                    "Number of States",
+                    f"{num_states}",
+                    help="Total number of states in the system"
+                )
+                st.metric(
+                    "Terminating States",
+                    f"{num_terminating}",
+                    f"{num_terminating/num_states:.1%} of total",
+                    help="Number of states that terminate"
+                )
+            
+            with col2:
+                st.metric(
+                    "Total Transitions",
+                    f"{num_transitions}",
+                    help="Total number of non-zero transitions"
+                )
+                st.metric(
+                    "Avg. Outgoing Transitions",
+                    f"{avg_transitions:.2f}",
+                    help="Average number of outgoing transitions per state"
+                )
+            
+            with col3:
+                st.metric(
+                    "Transition Sparsity",
+                    f"{sparsity:.1%}",
+                    help="Percentage of zero transitions in the matrix"
+                )
+                st.metric(
+                    "Density",
+                    f"{1-sparsity:.1%}",
+                    help="Percentage of non-zero transitions in the matrix"
+                )
+
+            # Add a visual representation of the metrics
+            st.markdown("### 📈 System Characteristics")
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+            
+            # Pie chart for state types
+            ax1.pie([num_terminating, num_states - num_terminating],
+                   labels=['Terminating', 'Non-terminating'],
+                   autopct='%1.1f%%',
+                   colors=['lightblue', 'lightgreen'])
+            ax1.set_title('State Types Distribution')
+            
+            # Bar chart for transition metrics
+            metrics = ['Total States', 'Terminating States', 'Total Transitions', 'Avg. Transitions']
+            values = [num_states, num_terminating, num_transitions, avg_transitions]
+            ax2.bar(metrics, values, color=['lightblue', 'lightgreen', 'lightcoral', 'lightyellow'])
+            ax2.set_title('System Metrics')
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            
+            st.pyplot(fig)
 
             st.markdown("### 🔍 State Analysis")
-            max_idx = np.unravel_index(np.argmax(D), D.shape)
-            st.info(f"Most different states: S{max_idx[0]+1} and S{max_idx[1]+1} (distance: {D[max_idx]:.3f})")
-
-            np.fill_diagonal(D, np.inf)
-            min_idx = np.unravel_index(np.argmin(D), D.shape)
-            st.success(f"Most similar states: S{min_idx[0]+1} and S{min_idx[1]+1} (distance: {D[min_idx]:.3f})")
+            
+            # Find all pairs with minimum and maximum distances
+            D_copy = D.copy()  # Create a copy to avoid modifying the original
+            np.fill_diagonal(D_copy, np.inf)  # Exclude self-comparisons for minimum distance
+            min_distance = np.min(D_copy)
+            
+            # For maximum distance, use the original matrix
+            max_distance = np.max(D)
+            
+            # Find all pairs with minimum distance
+            min_pairs = np.where(np.abs(D_copy - min_distance) < 1e-10)
+            min_pairs = list(zip(min_pairs[0], min_pairs[1]))
+            
+            # Find all pairs with maximum distance
+            max_pairs = np.where(np.abs(D - max_distance) < 1e-10)
+            max_pairs = list(zip(max_pairs[0], max_pairs[1]))
+            
+            # Create columns for the analysis
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("#### 🎯 Most Similar States")
+                if len(min_pairs) == 1:
+                    st.success(f"States S{min_pairs[0][0]+1} and S{min_pairs[0][1]+1} are most similar with distance {min_distance:.3f}")
+                else:
+                    st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f}):")
+                    for i, (s1, s2) in enumerate(min_pairs, 1):
+                        st.write(f"{i}. States S{s1+1} and S{s2+1}")
+                
+                # Visualize the most similar states
+                if len(min_pairs) > 0:
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    similar_states = set()
+                    for s1, s2 in min_pairs:
+                        similar_states.add(s1)
+                        similar_states.add(s2)
+                    
+                    # Create a subgraph of the most similar states
+                    subgraph = T[list(similar_states)][:, list(similar_states)]
+                    sns.heatmap(subgraph, annot=True, cmap="YlGn", fmt=".2f",
+                              xticklabels=[f"S{i+1}" for i in similar_states],
+                              yticklabels=[f"S{i+1}" for i in similar_states])
+                    plt.title("Transition Probabilities\nBetween Most Similar States")
+                    st.pyplot(fig)
+            
+            with col2:
+                st.markdown("#### 🎯 Most Different States")
+                if len(max_pairs) == 1:
+                    st.error(f"States S{max_pairs[0][0]+1} and S{max_pairs[0][1]+1} are most different with distance {max_distance:.3f}")
+                else:
+                    st.error(f"Found {len(max_pairs)} pairs of most different states (distance: {max_distance:.3f}):")
+                    for i, (s1, s2) in enumerate(max_pairs, 1):
+                        st.write(f"{i}. States S{s1+1} and S{s2+1}")
+                
+                # Visualize the most different states
+                if len(max_pairs) > 0:
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    different_states = set()
+                    for s1, s2 in max_pairs:
+                        different_states.add(s1)
+                        different_states.add(s2)
+                    
+                    # Create a subgraph of the most different states
+                    subgraph = T[list(different_states)][:, list(different_states)]
+                    sns.heatmap(subgraph, annot=True, cmap="YlOrRd", fmt=".2f",
+                              xticklabels=[f"S{i+1}" for i in different_states],
+                              yticklabels=[f"S{i+1}" for i in different_states])
+                    plt.title("Transition Probabilities\nBetween Most Different States")
+                    st.pyplot(fig)
 
         with tab4:
             st.markdown("### 🧠 Probabilistic Transition System Comparison")
@@ -245,6 +378,71 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                     minimized_labels
                 )
                 st.graphviz_chart(minimized_graphviz_src)
+
+        with tab5:
+            st.markdown("## 📚 Theoretical Foundations")
+            
+            st.markdown("""
+            ### Probabilistic Bisimulation
+            Probabilistic bisimulation is an equivalence relation that captures behavioral equivalence 
+            between states in probabilistic transition systems. Two states are bisimilar if:
+            
+            1. They have the same termination behavior
+            2. For each equivalence class, they have the same probability of transitioning to that class
+            
+            ### Bisimulation Distance
+            The bisimulation distance extends the notion of bisimulation by providing a quantitative 
+            measure of how different two states are. It is computed using the Wasserstein metric, 
+            which measures the minimum cost of transforming one probability distribution into another.
+            
+            #### Mathematical Definition
+            For states s and t, their bisimulation distance d(s,t) is defined as:
+            
+            d(s,t) = max{
+                |T(s) - T(t)|,
+                sup_a min_π ∑(s',t') π(s',t') * d(s',t')
+            }
+            
+            where:
+            - T(s) is the termination probability of state s
+            - π is a coupling between the probability distributions of s and t
+            - a ranges over all actions
+            """)
+            
+            st.markdown("### 🔍 Key Properties")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                st.markdown("""
+                #### Bisimulation Properties
+                - Reflexivity: s ~ s
+                - Symmetry: if s ~ t then t ~ s
+                - Transitivity: if s ~ t and t ~ u then s ~ u
+                - Compositionality: preserved under parallel composition
+                """)
+            
+            with col2:
+                st.markdown("""
+                #### Distance Properties
+                - Non-negativity: d(s,t) ≥ 0
+                - Symmetry: d(s,t) = d(t,s)
+                - Triangle inequality: d(s,t) ≤ d(s,u) + d(u,t)
+                - Continuity: small changes in probabilities lead to small changes in distance
+                """)
+            
+            st.markdown("### 📊 Interpretation of Results")
+            st.markdown("""
+            The distance matrix and heatmap show:
+            - 0 distance: States are bisimilar
+            - Small distance: States are behaviorally similar
+            - Large distance: States have significantly different behavior
+            
+            The minimization process:
+            1. Identifies equivalent states
+            2. Merges them into equivalence classes
+            3. Preserves the behavioral properties
+            4. Reduces the system size while maintaining its essential characteristics
+            """)
 
     except Exception as e:
         st.error(f"❌ Computation error: {e}")
