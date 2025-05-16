@@ -114,20 +114,29 @@ def bisimulation_distance_matrix(T, Term, max_iter=100):
         D = D_new
     return D
 
-def generate_graphviz_source(matrix, terminating_vector, transition_labels):
+def generate_graphviz_source(matrix, terminating_vector, transition_labels, is_minimized=False):
     dot = Digraph()
+    prefix = "Class" if is_minimized else "State"
+    
     for i in range(len(matrix)):
-        label = f"State {i}"
+        label = f"{prefix} {i+1}"  # Start from 1
         style = {'shape': 'circle'}
         if terminating_vector[i]:
             dot.node(label, label, shape='circle', color='lightblue', style='filled', peripheries='2')
         else:
             dot.node(label, label, shape='circle', color='lightgreen', style='filled')
 
-    for (i, j), label in transition_labels.items():
-        prob = matrix[i][j]
-        label_text = label if isinstance(label, str) else ", ".join(label)
-        dot.edge(f"State {i}", f"State {j}", label=f"{label_text} ({prob:.2f})")
+    # Add all transitions, not just those with labels
+    for i in range(len(matrix)):
+        for j in range(len(matrix)):
+            if matrix[i][j] > 0:  # If there is a transition
+                prob = matrix[i][j]
+                # Get label if it exists, otherwise use empty string
+                label = transition_labels.get((i, j), "")
+                label_text = label if isinstance(label, str) else ", ".join(label)
+                # Only show label if it exists
+                edge_label = f"{label_text} ({prob:.2f})" if label_text else f"{prob:.2f}"
+                dot.edge(f"{prefix} {i+1}", f"{prefix} {j+1}", label=edge_label)  # Start from 1
 
     return dot.source  # This is key!
 

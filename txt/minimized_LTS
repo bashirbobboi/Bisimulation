@@ -1,6 +1,0 @@
-digraph {
-	"{Heads}" [label="{Heads}" color=lightgreen shape=circle style=filled]
-	"{Tails}" [label="{Tails}" color=lightblue peripheries=2 shape=circle style=filled]
-	"{Heads}" -> "{Heads}" [label=Flip]
-	"{Heads}" -> "{Tails}" [label=Flip]
-}

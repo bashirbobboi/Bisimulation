@@ -14,6 +14,7 @@ from demo import (
     bisimulation_distance_matrix,
     generate_graphviz_source
 )
+import pandas as pd
 
 # Create necessary directories if they don't exist
 Path("txt").mkdir(exist_ok=True)
@@ -93,10 +94,16 @@ if input_mode == "Upload File":
         try:
             T, Term, labels = input_probabilistic_transition_system(filename=temp_path, use_file=True)
             st.success("✅ File successfully loaded and parsed.")
+            # Set session state to indicate file was uploaded
+            st.session_state.file_uploaded = True
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
+            st.session_state.file_uploaded = False
+    else:
+        st.session_state.file_uploaded = False
+
     # Display help section for file upload
-    with st.expander("📝 File Format Help", expanded=True):
+    with st.expander("📝 File Format Help", expanded=not st.session_state.get('file_uploaded', False)):
         st.markdown("""
         ### Expected File Format
         Your input file should follow this format:
@@ -180,29 +187,38 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
         D = bisimulation_distance_matrix(T, Term)
 
         # Create tabs for different visualizations
-        tab1, tab2, tab3, tab4, tab5 = st.tabs([
-            "📊 Distance Matrix", 
-            "🌡️ Heatmap", 
-            "📈 Analysis", 
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📏 Distance Analysis", 
+            "📈 System Analysis", 
             "🔄 Minimized PTS",
             "📚 Theory"
         ])
         
         with tab1:
-            st.markdown("### Distance Matrix")
+            st.markdown("### Distance Analysis")
+            
+            st.markdown("#### Distance Matrix")
             with st.expander("Show Distance Table", expanded=True):
-                st.dataframe(np.round(D, 3))
+                # Create a DataFrame with 1-based indexing
+                df = pd.DataFrame(np.round(D, 3), 
+                                index=[f"State {i+1}" for i in range(len(D))],
+                                columns=[f"State {i+1}" for i in range(len(D))])
+                st.dataframe(df)
+
+            st.markdown("#### Distance Heatmap")
+            fig, ax = plt.subplots(figsize=(6, 4))  # Increased figure size
+            sns.heatmap(D, annot=True, cmap="YlOrRd", fmt=".3f",
+                        xticklabels=[f"State {i+1}" for i in range(len(D))],
+                        yticklabels=[f"State {i+1}" for i in range(len(D))],
+                        annot_kws={"size": 8})  # Increased annotation size
+            # Set tick label sizes after creating the heatmap
+            ax.tick_params(axis='both', which='major', labelsize=8)  # Increased tick label size
+            plt.title("Bisimulation Distance Heatmap", pad=8, size=12)  # Increased title size
+            plt.tight_layout()
+            st.pyplot(fig, use_container_width=True)
+
 
         with tab2:
-            st.markdown("### Heatmap Visualization")
-            fig, ax = plt.subplots(figsize=(10, 8))
-            sns.heatmap(D, annot=True, cmap="YlOrRd", fmt=".3f",
-                        xticklabels=[f"S{i+1}" for i in range(len(D))],
-                        yticklabels=[f"S{i+1}" for i in range(len(D))])
-            plt.title("Bisimulation Distance Heatmap")
-            st.pyplot(fig)
-
-        with tab3:
             st.markdown("### 📊 Summary Statistics")
             
             # Calculate metrics
@@ -283,13 +299,17 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
             # For maximum distance, use the original matrix
             max_distance = np.max(D)
             
-            # Find all pairs with minimum distance
+            # Find all pairs with minimum distance and filter duplicates
             min_pairs = np.where(np.abs(D_copy - min_distance) < 1e-10)
             min_pairs = list(zip(min_pairs[0], min_pairs[1]))
+            # Filter out duplicate pairs (e.g., if (1,2) exists, remove (2,1))
+            min_pairs = [(s1, s2) for s1, s2 in min_pairs if s1 < s2]
             
-            # Find all pairs with maximum distance
+            # Find all pairs with maximum distance and filter duplicates
             max_pairs = np.where(np.abs(D - max_distance) < 1e-10)
             max_pairs = list(zip(max_pairs[0], max_pairs[1]))
+            # Filter out duplicate pairs
+            max_pairs = [(s1, s2) for s1, s2 in max_pairs if s1 < s2]
             
             # Create columns for the analysis
             col1, col2 = st.columns(2)
@@ -344,7 +364,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                     plt.title("Transition Probabilities\nBetween Most Different States")
                     st.pyplot(fig)
 
-        with tab4:
+        with tab3:
             st.markdown("### 🧠 Probabilistic Transition System Comparison")
             
             # Compute the minimized PTS
@@ -356,18 +376,29 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
             # Display equivalence classes
             st.markdown("#### 📑 Equivalence Classes")
             for class_id, class_states in equivalence_classes.items():
-                st.write(f"Class {class_id}: States {class_states}, Terminating: {class_termination_status[class_id]}")
+                # Convert state numbers to 1-based indexing
+                states_1based = [s + 1 for s in class_states]
+                # Format states list based on number of states
+                if len(states_1based) == 1:
+                    states_str = f"state {states_1based[0]}"
+                else:
+                    states_str = ", ".join(f"state {s}" for s in states_1based[:-1]) + f" & state {states_1based[-1]}"
+                st.write(f"Class {class_id + 1}: {states_str}, Terminating: {class_termination_status[class_id]}")
 
             # Display minimized transition matrix
             st.markdown("#### 📊 Minimized Transition Matrix")
-            st.dataframe(np.round(minimized_T, 3))
+            # Create a DataFrame with 1-based indexing
+            minimized_df = pd.DataFrame(np.round(minimized_T, 3),
+                                     index=[f"Class {i+1}" for i in range(len(minimized_T))],
+                                     columns=[f"Class {i+1}" for i in range(len(minimized_T))])
+            st.dataframe(minimized_df)
 
             # Create two columns for side-by-side visualization
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("#### 🎨 Original PTS")
-                graphviz_src = generate_graphviz_source(T, Term, labels)
+                graphviz_src = generate_graphviz_source(T, Term, labels, is_minimized=False)
                 st.graphviz_chart(graphviz_src)
             
             with col2:
@@ -375,11 +406,12 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                 minimized_graphviz_src = generate_graphviz_source(
                     minimized_T, 
                     list(class_termination_status.values()), 
-                    minimized_labels
+                    minimized_labels,
+                    is_minimized=True
                 )
                 st.graphviz_chart(minimized_graphviz_src)
 
-        with tab5:
+        with tab4:
             st.markdown("## 📚 Theoretical Foundations")
             
             st.markdown("""
