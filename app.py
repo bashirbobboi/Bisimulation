@@ -12,7 +12,8 @@ from commandline import (
 )
 from demo import (
     bisimulation_distance_matrix,
-    generate_graphviz_source
+    generate_graphviz_source,
+    analyze_state_differences
 )
 import pandas as pd
 
@@ -217,11 +218,81 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                 plt.title("Bisimulation Distance Heatmap", pad=8, size=12)  # Increased title size
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
-
+                
+                # Add interactive state pair analysis
+                st.markdown("### 🔍 Analyze State Differences")
+                st.markdown("""
+                This section helps you understand why any two states behave differently. Select two states below to see:
+                - Their overall distance
+                - Whether they terminate differently
+                - Which differences contribute most to their distance
+                """)
+                
+                col1, col2 = st.columns(2)
+                with col1:
+                    state1 = st.selectbox("Select first state", 
+                                        [f"State {i+1}" for i in range(len(D))],
+                                        key="state1",
+                                        help="Choose the first state to compare")
+                with col2:
+                    state2 = st.selectbox("Select second state", 
+                                        [f"State {i+1}" for i in range(len(D))],
+                                        key="state2",
+                                        help="Choose the second state to compare")
+                
+                # Get state indices (subtract 1 because states are 1-indexed in UI)
+                idx1 = int(state1.split()[1]) - 1
+                idx2 = int(state2.split()[1]) - 1
+                
+                # Get explanations
+                explanations = analyze_state_differences(idx1, idx2, T, Term, D)
+                
+                # Display the distance and explanations
+                st.markdown(f"#### Distance between {state1} and {state2}: {D[idx1, idx2]:.3f}")
+                
+                if idx1 == idx2:
+                    st.info(f"You're comparing {state1} with itself! The distance is always 0 because:")
+                    st.markdown("""
+                    - It's the same state
+                    - States always have identical behavior to themselves
+                    - This is called the reflexive property of bisimulation
+                    """)
+                elif D[idx1, idx2] == 0:
+                    st.success(f"These states are bisimilar (identical behavior)! They have:")
+                    st.markdown("""
+                    - The same termination behavior
+                    - Identical transition probabilities to all states
+                    - No behavioral differences
+                    """)
+                else:
+                    st.markdown("##### Why these states differ:")
+                    # Display explanations directly without parsing
+                    has_termination_mismatch = False
+                    for explanation in explanations:
+                        if "Termination mismatch" in explanation:
+                            has_termination_mismatch = True
+                            st.markdown(f"- {explanation}")
+                            if D[idx1, idx2] == 1.0:
+                                st.markdown("  *(This alone contributes the full distance of 1.0)*")
+                        elif not has_termination_mismatch or D[idx1, idx2] < 1.0:
+                            st.markdown(f"- {explanation}")
+                    if not has_termination_mismatch or D[idx1, idx2] < 1.0:
+                        st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
 
             st.markdown("#### 📊 Metrics Breakdown")
             # Add state analysis in expanders
             with st.expander("🔍 State Analysis", expanded=True):
+                st.markdown("""
+                This section shows you the most similar and most different states in your system.
+                - **Most Similar States**: These states behave almost identically
+                - **Most Different States**: These states have the most different behavior
+                
+                For each pair, you'll see:
+                - Their distance (0 = identical, 1 = completely different)
+                - Why they are similar or different
+                - How their transition probabilities compare
+                """)
+                
                 # Find all pairs with minimum and maximum distances
                 D_copy = D.copy()  # Create a copy to avoid modifying the original
                 np.fill_diagonal(D_copy, np.inf)  # Exclude self-comparisons for minimum distance
@@ -251,6 +322,26 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                 with similar_tab:
                     if len(min_pairs) == 1:
                         st.success(f"States S{min_pairs[0][0]+1} and S{min_pairs[0][1]+1} are most similar with distance {min_distance:.3f}")
+                        # Add explanation for this pair
+                        explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D)
+                        st.markdown("##### Why these states are similar:")
+                        for explanation in explanations:
+                            if "Termination mismatch" in explanation:
+                                st.markdown(f"- {explanation}")
+                            else:
+                                # Parse the transition difference explanation
+                                parts = explanation.split(": ")[1].split(" vs ")
+                                state1_trans = parts[0].split(" (p=")
+                                state2_trans = parts[1].split(" (p=")
+                                contribution = explanation.split("contribution: ")[1].replace("contribution", "").strip()
+                                
+                                # Create a more readable explanation
+                                st.markdown(f"""
+                                - **Transition Difference:**
+                                  - State {min_pairs[0][0]+1} has a {state1_trans[1]} chance of going to {state1_trans[0]}
+                                  - State {min_pairs[0][1]+1} has a {state2_trans[1]} chance of going to {state2_trans[0]}
+                                  - This difference contributes {contribution} to their overall distance
+                                """)
                     else:
                         st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f})")
                         # Create a table for similar states
@@ -270,6 +361,26 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                 with different_tab:
                     if len(max_pairs) == 1:
                         st.error(f"States S{max_pairs[0][0]+1} and S{max_pairs[0][1]+1} are most different with distance {max_distance:.3f}")
+                        # Add explanation for this pair
+                        explanations = analyze_state_differences(max_pairs[0][0], max_pairs[0][1], T, Term, D)
+                        st.markdown("##### Why these states differ:")
+                        for explanation in explanations:
+                            if "Termination mismatch" in explanation:
+                                st.markdown(f"- {explanation}")
+                            else:
+                                # Parse the transition difference explanation
+                                parts = explanation.split(": ")[1].split(" vs ")
+                                state1_trans = parts[0].split(" (p=")
+                                state2_trans = parts[1].split(" (p=")
+                                contribution = explanation.split("contribution: ")[1].replace("contribution =", "").strip()
+                                
+                                # Create a more readable explanation
+                                st.markdown(f"""
+                                - **Transition Difference:**
+                                  - State {max_pairs[0][0]+1} has a {state1_trans[1]} chance of going to {state1_trans[0]}
+                                  - State {max_pairs[0][1]+1} has a {state2_trans[1]} chance of going to {state2_trans[0]}
+                                  - This difference contributes {contribution} to their overall distance
+                                """)
                     else:
                         st.error(f"Found {len(max_pairs)} pairs of most different states (distance: {max_distance:.3f})")
                         # Create a table for different states

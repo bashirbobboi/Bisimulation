@@ -90,9 +90,58 @@ def wasserstein_distance(p, q, C):
     bounds = [(0, None)] * (n * m)
     res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
     if res.success:
-        return res.fun
+        coupling = res.x.reshape((n, m))
+        return res.fun, coupling
     else:
         raise ValueError("Wasserstein LP did not converge: " + res.message)
+
+def analyze_state_differences(x, y, T, Term, D_prev):
+    """
+    Analyze why two states are different by examining their transition probabilities and coupling.
+    
+    Args:
+        x, y: State indices
+        T: Transition matrix
+        Term: Termination vector
+        D_prev: Previous distance matrix
+    
+    Returns:
+        List of explanations for why the states differ
+    """
+    explanations = []
+    
+    # Check termination status
+    if Term[x] != Term[y]:
+        explanations.append(f"Termination mismatch: State {x+1} is {'terminating' if Term[x] else 'non-terminating'}, "
+                          f"while State {y+1} is {'terminating' if Term[y] else 'non-terminating'}")
+    
+    # Get transition probabilities and coupling
+    dist, coupling = wasserstein_distance(T[x], T[y], D_prev)
+    
+    # Find significant transitions that contribute to the distance
+    significant_moves = []
+    for i in range(len(T)):
+        for j in range(len(T)):
+            if coupling[i,j] > 1e-8:  # Non-zero coupling
+                contribution = coupling[i,j] * D_prev[i,j]
+                if contribution > 0.01:  # Only consider significant contributions
+                    significant_moves.append((i, j, coupling[i,j], D_prev[i,j], contribution))
+    
+    # Sort by contribution
+    significant_moves.sort(key=lambda x: x[4], reverse=True)
+    
+    # Add explanations for top transitions
+    for i, j, flow, cost, contribution in significant_moves[:3]:  # Top 3 contributions
+        if T[x,i] > 0 or T[y,j] > 0:  # Only explain if there's an actual transition
+            # Add transition difference explanation
+            explanation = (f"Transition difference: Transition from State {x+1} to State {i+1} "
+                         f"(probability = {T[x,i]:.2f}) vs From State {y+1} to State {j+1} "
+                         f"(probability = {T[y,j]:.2f}) → this contributes {contribution:.3f} to their distance")
+
+
+            explanations.append(explanation)
+    
+    return explanations
 
 def bisimulation_distance_matrix(T, Term, max_iter=100):
     n = T.shape[0]
@@ -108,7 +157,7 @@ def bisimulation_distance_matrix(T, Term, max_iter=100):
                 if Term[x] != Term[y]:
                     D_new[x][y] = 1.0
                 else:
-                    D_new[x][y] = wasserstein_distance(T[x], T[y], D)
+                    D_new[x][y] = wasserstein_distance(T[x], T[y], D)[0]  # Only use distance value
         if np.array_equal(D_new, D):
             break
         D = D_new
