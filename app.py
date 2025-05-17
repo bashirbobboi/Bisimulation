@@ -82,8 +82,10 @@ with st.sidebar:
     st.markdown("---")
     input_mode = st.radio("Select Input Mode:", ["Upload File", "Manual Input", "Benchmark Datasets"])
 
-T = Term = labels = None
-all_labels_filled = True  # Ensure initialized
+T = st.session_state.get('T')
+Term = st.session_state.get('Term')
+labels = st.session_state.get('labels')
+all_labels_filled = st.session_state.get('all_labels_filled', True)
 
 if input_mode == "Benchmark Datasets":
     st.sidebar.markdown("### 📚 Benchmark Datasets")
@@ -175,57 +177,53 @@ if input_mode == "Benchmark Datasets":
             all_labels_filled = True
     else:  # Random Generation
         st.sidebar.markdown("#### Generate Random System")
-        num_states = st.sidebar.number_input(
-            "Number of States",
-            min_value=2,
-            max_value=10,
-            value=4,
-            help="Choose how many states your random system should have"
-        )
-        
-        num_terminating = st.sidebar.number_input(
-            "Number of Terminating States",
-            min_value=0,
-            max_value=num_states,
-            value=1,
-            help="Choose how many states should be terminating"
-        )
-        
-        include_labels = st.sidebar.checkbox(
-            "Include Transition Labels",
-            value=False,
-            help="If unchecked, generates a pure Markov chain without labels"
-        )
-        
-        if st.sidebar.button("Generate Random System"):
-            try:
-                # Generate random transition matrix
-                T = np.random.dirichlet(np.ones(num_states), size=num_states)
-                
-                # Generate random terminating states
-                Term = np.zeros(num_states, dtype=int)
-                terminating_indices = np.random.choice(num_states, num_terminating, replace=False)
-                Term[terminating_indices] = 1
-                
-                # For terminating states, set their outgoing transitions to 0
-                for i in terminating_indices:
-                    T[i] = np.zeros(num_states)
-                
-                # Generate labels only if requested
-                labels = {}
-                if include_labels:
-                    for i in range(num_states):
-                        if not Term[i]:  # Only process non-terminating states
-                            for j in range(num_states):
-                                if T[i,j] > 0:
-                                    labels[(i,j)] = f"a{i}{j}"
-                
-                st.success("✅ Random system generated successfully!")
-                all_labels_filled = True
-            except Exception as e:
-                st.error(f"❌ Error generating random system: {str(e)}")
-                T = Term = labels = None
-                all_labels_filled = False
+        with st.sidebar.form("rand"):
+            num_states = st.number_input(
+                "Number of States",
+                min_value=2,
+                max_value=10,
+                value=4,
+                help="Choose how many states your random system should have"
+            )
+            num_terminating = st.number_input(
+                "Number of Terminating States",
+                min_value=0,
+                max_value=num_states,
+                value=1,
+                help="Choose how many states should be terminating"
+            )
+            include_labels = st.checkbox(
+                "Include Transition Labels",
+                value=False,
+                help="If unchecked, generates a pure Markov chain without labels"
+            )
+            submit_rand = st.form_submit_button("Generate Random System")
+            if submit_rand:
+                try:
+                    T = np.random.dirichlet(np.ones(num_states), size=num_states)
+                    Term = np.zeros(num_states, dtype=int)
+                    terminating_indices = np.random.choice(num_states, num_terminating, replace=False)
+                    Term[terminating_indices] = 1
+                    for i in terminating_indices:
+                        T[i] = np.zeros(num_states)
+                    labels = {}
+                    if include_labels:
+                        for i in range(num_states):
+                            if not Term[i]:
+                                for j in range(num_states):
+                                    if T[i, j] > 0:
+                                        labels[(i, j)] = f"a{i}{j}"
+                    st.session_state.T = T
+                    st.session_state.Term = Term
+                    st.session_state.labels = labels
+                    st.success("✅ Random system generated successfully!")
+                    st.session_state.all_labels_filled = True
+                except Exception as e:
+                    st.error(f"❌ Error generating random system: {str(e)}")
+                    st.session_state.T = None
+                    st.session_state.Term = None
+                    st.session_state.labels = None
+                    st.session_state.all_labels_filled = False
 
 elif input_mode == "Upload File":
     # --- Model format selection ---
