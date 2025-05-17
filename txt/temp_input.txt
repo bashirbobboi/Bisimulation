@@ -1,24 +1,37 @@
-// Knuth's model of a fair die using only fair coins
-dtmc
+8
+# Transition matrix (8×8 rows must each sum to 1)
+0.5 0.5 0   0   0   0   0   0
+0   0.5 0.5 0   0   0   0   0
+0   0   0.5 0.5 0   0   0   0
+0   0   0   0   0.5 0.5 0   0
+0   0   0   0   1   0   0   0
+0   0   0   0   0   1   0   0
+0.3 0   0   0.7 0   0   0   0
+0   0   0   0   0.4 0.4 0   0.2
 
-module die
+# Terminating-state flags (1=terminating, 0=non–terminating)
+0
+0
+0
+0
+1
+1
+0
+0
 
-	// local state
-	s : [0..7] init 0;
-	// value of the dice
-	d : [0..6] init 0;
-	
-	[] s=0 -> 0.5 : (s'=1) + 0.5 : (s'=2);
-	[] s=1 -> 0.5 : (s'=3) + 0.5 : (s'=4);
-	[] s=2 -> 0.5 : (s'=5) + 0.5 : (s'=6);
-	[] s=3 -> 0.5 : (s'=1) + 0.5 : (s'=7) & (d'=1);
-	[] s=4 -> 0.5 : (s'=7) & (d'=2) + 0.5 : (s'=7) & (d'=3);
-	[] s=5 -> 0.5 : (s'=7) & (d'=4) + 0.5 : (s'=7) & (d'=5);
-	[] s=6 -> 0.5 : (s'=2) + 0.5 : (s'=7) & (d'=6);
-	[] s=7 -> (s'=7);
-	
-endmodule
-
-rewards "coin_flips"
-	[] s<7 : 1;
-endrewards
+# Transition labels (from state to state label)
+1 1 loop
+1 2 a
+2 2 loop
+2 3 a
+3 3 loop3
+3 4 c
+4 5 x
+4 6 y
+5 5 stop
+6 6 stop
+7 1 d
+7 4 e
+8 5 x
+8 6 y
+8 8 g

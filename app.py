@@ -228,43 +228,62 @@ if input_mode == "Benchmark Datasets":
 elif input_mode == "Upload File":
     # --- Model format selection ---
     st.markdown("#### Model Format")
+    if 'model_format' not in st.session_state:
+        st.session_state.model_format = "txt (legacy)"
+
     model_format = st.selectbox(
         "Choose model format:",
         ["txt (legacy)", "prism", "json"],
+        index=["txt (legacy)", "prism", "json"].index(st.session_state.model_format),
         help="Select the format of your uploaded model file. 'txt' is the legacy format; others use the pluggable parser."
     )
 
-    if 'last_format' not in st.session_state:
-        st.session_state.last_format = model_format
+    # If the user changes the format, update session state
+    if model_format != st.session_state.model_format:
+        st.session_state.model_format = model_format
+        # Clear the parsed content but not the raw upload
+        if 'uploaded_content' in st.session_state:
+            del st.session_state['uploaded_content']
+        st.rerun()
 
-    # If the user changes the format, clear the uploaded file
-    if model_format != st.session_state.last_format:
-        st.session_state['uploaded_file'] = None
-        st.session_state.last_format = model_format
-
-    # Use a dynamic key for the file uploader so it resets on format change
+    # Use a fixed key for the file uploader
     uploaded_file = st.file_uploader(
         "📁 Upload your model file",
         type=["txt", "pm", "json"],
-        key=f"uploaded_file_{model_format}"
+        key="uploaded_file"
     )
-    if uploaded_file:
-        content = uploaded_file.read().decode("utf-8")
-        temp_path = os.path.join("txt", "temp_input.txt")
-        with open(temp_path, "w", encoding="utf-8") as f:
-            f.write(content)
+
+    # Handle new file uploads
+    if uploaded_file is not None:
+        raw = uploaded_file.read().decode()
+        # stash it
+        st.session_state["uploaded_content"] = raw
+        st.session_state["uploaded_name"] = uploaded_file.name
+
+        # pick up extension → target_format
+        ext = os.path.splitext(uploaded_file.name)[1].lower()
+        newfmt = {".pm": "prism", ".json": "json", ".txt": "txt (legacy)"}.get(ext)
+        if newfmt and newfmt != st.session_state.model_format:
+            st.session_state.model_format = newfmt
+            st.rerun()
+
+    # Process the uploaded content if it exists
+    content = st.session_state.get("uploaded_content")
+    if content:
         try:
-            if model_format == "txt (legacy)":
+            if st.session_state.model_format == "txt (legacy)":
+                temp_path = os.path.join("txt", "temp_input.txt")
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    f.write(content)
                 T, Term, labels = input_probabilistic_transition_system(filename=temp_path, use_file=True)
             else:
-                fmt = model_format if model_format != "txt (legacy)" else "txt"
-                T, Term, labels = parse_model(content, fmt)
+                T, Term, labels = parse_model(content, st.session_state.model_format)
             st.success("✅ File successfully loaded and parsed.")
             st.session_state.file_uploaded = True
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
             st.session_state.file_uploaded = False
-    else:
+    elif not uploaded_file:
         st.info("Please upload a file in the selected format.")
 
     # Display help section for file upload
