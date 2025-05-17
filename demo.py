@@ -177,6 +177,9 @@ def generate_graphviz_source(matrix, terminating_vector, transition_labels, is_m
 
     # Add all transitions, not just those with labels
     for i in range(len(matrix)):
+        # Skip outgoing transitions from terminating states
+        if terminating_vector[i]:
+            continue
         for j in range(len(matrix)):
             if matrix[i][j] > 0:  # If there is a transition
                 prob = matrix[i][j]

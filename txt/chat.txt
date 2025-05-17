@@ -20,10 +20,10 @@
 0
 
 # Transition labels (from state to state label)
-1 1 loop1
+1 1 loop
 1 2 a
-2 2 loop2
-2 3 b
+2 2 loop
+2 3 a
 3 3 loop3
 3 4 c
 4 5 x

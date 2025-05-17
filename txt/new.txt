@@ -13,9 +13,3 @@
 0
 1
 
-# Transition labels (each line: FROM TO LABEL)
-1 1 loop
-1 2 move
-2 2 loop
-2 3 move
-3 3 exit

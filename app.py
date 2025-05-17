@@ -80,12 +80,154 @@ st.markdown("""
 with st.sidebar:
     st.title("⚙️ Input Settings")
     st.markdown("---")
-    input_mode = st.radio("Select Input Mode:", ["Upload File", "Manual Input"])
+    input_mode = st.radio("Select Input Mode:", ["Upload File", "Manual Input", "Benchmark Datasets"])
 
 T = Term = labels = None
 all_labels_filled = True  # Ensure initialized
 
-if input_mode == "Upload File":
+if input_mode == "Benchmark Datasets":
+    st.sidebar.markdown("### 📚 Benchmark Datasets")
+    dataset_type = st.sidebar.radio("Choose dataset type:", ["Pre-built Systems", "Random Generator"])
+    
+    # --- Pre-built Benchmark Systems ---
+    benchmark_systems = [
+        {
+            "name": "Three-State Markov Chain (No Termination)",
+            "matrix": [
+                [0, 1, 0],
+                [0, 0.5, 0.5],
+                [1/3, 0, 2/3]
+            ],
+            "termination": [0, 0, 0],
+            "labels": {},
+            "description": (
+                "This simple example (from Kemeny et al. 1966) has 3 states and no termination (each state's outgoing probabilities sum to 1). "
+                "State 1 always transitions to State 2; State 2 stays in 2 or goes to 3 with equal probability; "
+                "State 3 stays in 3 with probability 2/3 or goes to 1 with probability 1/3."
+            ),
+            "citation": ("Kemeny et al., as quoted in a Markov chains tutorial", "https://www.ssc.wisc.edu/~jmontgom/markovchains.pdf")
+        },
+        {
+            "name": "Six-State Absorbing Random Walk (Gambler's Ruin)",
+            "matrix": [
+                [1, 0, 0, 0, 0, 0],
+                [0.5, 0, 0.5, 0, 0, 0],
+                [0, 0.5, 0, 0.5, 0, 0],
+                [0, 0, 0.5, 0, 0.5, 0],
+                [0, 0, 0, 0.5, 0, 0.5],
+                [0, 0, 0, 0, 0, 1]
+            ],
+            "termination": [1, 0, 0, 0, 0, 1],
+            "labels": {},
+            "description": (
+                "This 6-state PTS is a small gambler's ruin random walk with two absorbing termination states. "
+                "States 1–4 move 'left' or 'right' with equal probability 0.5 toward the absorbing boundaries."
+            ),
+            "citation": ("Topics in Probability blog (absorbing chain example)", "https://probabilitytopics.wordpress.com/2018/01/08/absorbing-markov-chains/")
+        },
+        {
+            "name": "Eight-State Fair Die Simulation (Knuth–Yao Coin Flip Model)",
+            "matrix": [
+                [0, 0.5, 0.5, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0.5, 0.5, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0.5, 0.5, 0],
+                [0.5, 0, 0, 0, 0, 0, 0, 0.5],
+                [0, 0.5, 0, 0, 0, 0, 0, 0.5],
+                [0, 0, 0, 0, 0, 0, 0, 1.0],
+                [0, 0.5, 0, 0, 0, 0, 0, 0.5],
+                [0, 0, 0, 0, 0, 0, 0, 1.0]
+            ],
+            "termination": [0, 0, 0, 0, 0, 0, 0, 1],
+            "labels": {},
+            "description": (
+                "This example comes from a PRISM model of Knuth & Yao's fair die simulation. "
+                "State 0 is the start; states 1–6 represent intermediate coin-flip outcomes; "
+                "state 7 is an absorbing termination state where the die value is decided."
+            ),
+            "citation": ("PRISM case study (Knuth–Yao die model)", "https://www.prismmodelchecker.org/casestudies/dice.php")
+        }
+    ]
+    
+    if dataset_type == "Pre-built Systems":
+        st.sidebar.markdown("#### Select a pre-built system:")
+        system_names = ["Select a system..."] + [sys["name"] for sys in benchmark_systems]
+        selected_idx = st.sidebar.selectbox(
+            "Choose a system:",
+            list(range(len(system_names))),
+            format_func=lambda i: system_names[i],
+            help="Select a pre-built probabilistic transition system from the literature"
+        )
+        if selected_idx == 0:
+            # No system selected yet; do not load or display anything
+            T = Term = labels = None
+            all_labels_filled = False
+            st.sidebar.info("Please select a system to load its details.")
+        else:
+            selected_system = benchmark_systems[selected_idx - 1]
+            st.sidebar.info(selected_system["description"])
+            st.sidebar.markdown(
+                f"**Source:** <a href='{selected_system['citation'][1]}' target='_blank'>{selected_system['citation'][0]}</a>",
+                unsafe_allow_html=True
+            )
+            T = np.array(selected_system["matrix"], dtype=float)
+            Term = np.array(selected_system["termination"], dtype=int)
+            labels = selected_system["labels"]
+            all_labels_filled = True
+    else:  # Random Generation
+        st.sidebar.markdown("#### Generate Random System")
+        num_states = st.sidebar.number_input(
+            "Number of States",
+            min_value=3,
+            max_value=10,
+            value=4,
+            help="Choose how many states your random system should have"
+        )
+        
+        num_terminating = st.sidebar.number_input(
+            "Number of Terminating States",
+            min_value=0,
+            max_value=num_states,
+            value=1,
+            help="Choose how many states should be terminating"
+        )
+        
+        include_labels = st.sidebar.checkbox(
+            "Include Transition Labels",
+            value=False,
+            help="If unchecked, generates a pure Markov chain without labels"
+        )
+        
+        if st.sidebar.button("Generate Random System"):
+            try:
+                # Generate random transition matrix
+                T = np.random.dirichlet(np.ones(num_states), size=num_states)
+                
+                # Generate random terminating states
+                Term = np.zeros(num_states, dtype=int)
+                terminating_indices = np.random.choice(num_states, num_terminating, replace=False)
+                Term[terminating_indices] = 1
+                
+                # For terminating states, set their outgoing transitions to 0
+                for i in terminating_indices:
+                    T[i] = np.zeros(num_states)
+                
+                # Generate labels only if requested
+                labels = {}
+                if include_labels:
+                    for i in range(num_states):
+                        if not Term[i]:  # Only process non-terminating states
+                            for j in range(num_states):
+                                if T[i,j] > 0:
+                                    labels[(i,j)] = f"a{i}{j}"
+                
+                st.success("✅ Random system generated successfully!")
+                all_labels_filled = True
+            except Exception as e:
+                st.error(f"❌ Error generating random system: {str(e)}")
+                T = Term = labels = None
+                all_labels_filled = False
+
+elif input_mode == "Upload File":
     uploaded_file = st.file_uploader("📁 Upload your transition matrix file (.txt)", type="txt")
     if uploaded_file:
         content = uploaded_file.read().decode("utf-8")
@@ -138,7 +280,7 @@ if input_mode == "Upload File":
 elif input_mode == "Manual Input":
     with st.sidebar:
         st.markdown("### 🛠️ Define Transition Matrix")
-        n = st.number_input("Number of states", min_value=2, max_value=10, step=1)
+        n = st.number_input("Number of states", min_value=3, max_value=10, step=1)
         matrix = []
         valid = True
 
@@ -147,7 +289,17 @@ elif input_mode == "Manual Input":
     for i in range(n):
         col_idx = i % 3
         with cols[col_idx]:
-            row_input = st.text_input(f"State {i+1} transitions", key=f"row_{i}")
+            if n > 1:
+                base = round(1.0/n, 2)
+                first = round(1.0 - (n-1)*base, 2)
+                placeholder = "e.g. " + " ".join([f"{first:.2f}"] + [f"{base:.2f}"]*(n-1))
+            else:
+                placeholder = "e.g. 1.00"
+            row_input = st.text_input(
+                f"State {i+1} transitions",
+                key=f"row_{i}",
+                placeholder=placeholder
+            )
             try:
                 row_vals = list(map(float, row_input.strip().split()))
                 if len(row_vals) != n or not np.isclose(sum(row_vals), 1.0):
@@ -161,37 +313,43 @@ elif input_mode == "Manual Input":
         st.markdown("### 🎯 Terminating States")
         Term = [st.selectbox(f"State {i+1}", [0, 1], key=f"term_{i}") for i in range(n)]
 
+    # Only show label inputs and create button if matrix and Term are valid
     if valid:
-        T = np.array(matrix)
+        T = None
         labels = {}
-        st.markdown("### 🏷️ Transition Labels")
+        st.markdown("### 🏷️ Transition Labels (Optional)")
         label_cols = st.columns(min(n, 3))
         for i in range(n):
             for j in range(n):
-                if T[i][j] > 0:
+                if matrix[i][j] > 0:
                     col_idx = (i * n + j) % 3
                     with label_cols[col_idx]:
                         label = st.text_input(f"S{i+1} → S{j+1}", key=f"label_{i}_{j}")
-                        if not label:
-                            all_labels_filled = False
-                        else:
+                        if label:
                             labels[(i, j)] = label
-
-        if not all_labels_filled:
-            st.warning("⚠️ Please fill in all transition labels to view results.")
+        st.warning("⚠️ You may optionally fill in transition labels. Leave blank for unlabeled transitions.")
+        # Add Create System button
+        if st.button("Create System"):
+            T = np.array(matrix)
+            Term = np.array(Term)
+            st.success("✅ Manual input accepted. System created.")
+            all_labels_filled = True
         else:
-            st.success("✅ Manual input accepted.")
+            T = None
+            Term = None
+            labels = None
+            all_labels_filled = False
 
 # ---- Main Calculation ---- #
-if T is not None and Term is not None and (input_mode == "Upload File" or all_labels_filled):
+if T is not None and Term is not None and (input_mode == "Upload File" or input_mode == "Manual Input" or (input_mode == "Benchmark Datasets" and all_labels_filled)):
     try:
         D = bisimulation_distance_matrix(T, Term)
 
         # Create tabs for different visualizations
         tab1, tab2, tab3, tab4 = st.tabs([
             "📏 Distance Analysis", 
-            "📈 System Analysis", 
             "🔄 Minimization",
+            "📈 System Analysis", 
             "📚 Theory"
         ])
         
@@ -200,7 +358,6 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
             
             st.markdown("#### Distance Matrix")
             with st.expander("Show Distance Table", expanded=True):
-                # Create a DataFrame with 1-based indexing
                 df = pd.DataFrame(np.round(D, 3), 
                                 index=[f"State {i+1}" for i in range(len(D))],
                                 columns=[f"State {i+1}" for i in range(len(D))])
@@ -208,18 +365,16 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
 
             st.markdown("#### Distance Heatmap")
             with st.expander("Show Distance Heatmap", expanded=True):
-                fig, ax = plt.subplots(figsize=(6, 4))  # Increased figure size
+                fig, ax = plt.subplots(figsize=(6, 4))
                 sns.heatmap(D, annot=True, cmap="YlOrRd", fmt=".3f",
                             xticklabels=[f"State {i+1}" for i in range(len(D))],
                             yticklabels=[f"State {i+1}" for i in range(len(D))],
-                            annot_kws={"size": 8})  # Increased annotation size
-                # Set tick label sizes after creating the heatmap
-                ax.tick_params(axis='both', which='major', labelsize=8)  # Increased tick label size
-                plt.title("Bisimulation Distance Heatmap", pad=8, size=12)  # Increased title size
+                            annot_kws={"size": 8})
+                ax.tick_params(axis='both', which='major', labelsize=8)
+                plt.title("Bisimulation Distance Heatmap", pad=8, size=12)
                 plt.tight_layout()
                 st.pyplot(fig, use_container_width=True)
                 
-                # Add interactive state pair analysis
                 st.markdown("### 🔍 Analyze State Differences")
                 st.markdown("""
                 This section helps you understand why any two states behave differently. Select two states below to see:
@@ -240,14 +395,11 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                                         key="state2",
                                         help="Choose the second state to compare")
                 
-                # Get state indices (subtract 1 because states are 1-indexed in UI)
                 idx1 = int(state1.split()[1]) - 1
                 idx2 = int(state2.split()[1]) - 1
                 
-                # Get explanations
                 explanations = analyze_state_differences(idx1, idx2, T, Term, D)
                 
-                # Display the distance and explanations
                 st.markdown(f"#### Distance between {state1} and {state2}: {D[idx1, idx2]:.3f}")
                 
                 if idx1 == idx2:
@@ -266,7 +418,6 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                     """)
                 else:
                     st.markdown("##### Why these states differ:")
-                    # Display explanations directly without parsing
                     has_termination_mismatch = False
                     for explanation in explanations:
                         if "Termination mismatch" in explanation:
@@ -284,13 +435,8 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
             with st.expander("🔍 State Analysis", expanded=True):
                 st.markdown("""
                 This section shows you the most similar and most different states in your system.
-                - **Most Similar States**: These states behave almost identically
-                - **Most Different States**: These states have the most different behavior
-                
-                For each pair, you'll see:
-                - Their distance (0 = identical, 1 = completely different)
-                - Why they are similar or different
-                - How their transition probabilities compare
+                - **Most Similar States**: These states behave the most similar
+                - **Most Different States**: These states have the most different behavior                
                 """)
                 
                 # Find all pairs with minimum and maximum distances
@@ -325,23 +471,9 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                         # Add explanation for this pair
                         explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D)
                         st.markdown("##### Why these states are similar:")
-                        for explanation in explanations:
-                            if "Termination mismatch" in explanation:
-                                st.markdown(f"- {explanation}")
-                            else:
-                                # Parse the transition difference explanation
-                                parts = explanation.split(": ")[1].split(" vs ")
-                                state1_trans = parts[0].split(" (p=")
-                                state2_trans = parts[1].split(" (p=")
-                                contribution = explanation.split("contribution: ")[1].replace("contribution", "").strip()
-                                
-                                # Create a more readable explanation
-                                st.markdown(f"""
-                                - **Transition Difference:**
-                                  - State {min_pairs[0][0]+1} has a {state1_trans[1]} chance of going to {state1_trans[0]}
-                                  - State {min_pairs[0][1]+1} has a {state2_trans[1]} chance of going to {state2_trans[0]}
-                                  - This difference contributes {contribution} to their overall distance
-                                """)
+                        for explanation in explanations[:3]:  # Show only top 3
+                            st.markdown(f"- {explanation}")
+                        st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
                     else:
                         st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f})")
                         # Create a table for similar states
@@ -364,23 +496,9 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                         # Add explanation for this pair
                         explanations = analyze_state_differences(max_pairs[0][0], max_pairs[0][1], T, Term, D)
                         st.markdown("##### Why these states differ:")
-                        for explanation in explanations:
-                            if "Termination mismatch" in explanation:
-                                st.markdown(f"- {explanation}")
-                            else:
-                                # Parse the transition difference explanation
-                                parts = explanation.split(": ")[1].split(" vs ")
-                                state1_trans = parts[0].split(" (p=")
-                                state2_trans = parts[1].split(" (p=")
-                                contribution = explanation.split("contribution: ")[1].replace("contribution =", "").strip()
-                                
-                                # Create a more readable explanation
-                                st.markdown(f"""
-                                - **Transition Difference:**
-                                  - State {max_pairs[0][0]+1} has a {state1_trans[1]} chance of going to {state1_trans[0]}
-                                  - State {max_pairs[0][1]+1} has a {state2_trans[1]} chance of going to {state2_trans[0]}
-                                  - This difference contributes {contribution} to their overall distance
-                                """)
+                        for explanation in explanations[:3]:  # Show only top 3
+                            st.markdown(f"- {explanation}")
+                        st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
                     else:
                         st.error(f"Found {len(max_pairs)} pairs of most different states (distance: {max_distance:.3f})")
                         # Create a table for different states
@@ -498,101 +616,62 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
 
 
         with tab2:
-            st.markdown("### 📊 Summary Statistics")
-            
-            # Calculate metrics
-            num_states = len(T)
-            num_terminating = sum(Term)
-            num_transitions = sum(sum(row > 0) for row in T)
-            avg_transitions = num_transitions / num_states
-            sparsity = 1 - (num_transitions / (num_states * num_states))  # Sparsity of transition matrix
-            
-            # Create metrics in a grid layout
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.metric(
-                    "Number of States",
-                    f"{num_states}",
-                    help="Total number of states in the system"
-                )
-                st.metric(
-                    "Terminating States",
-                    f"{num_terminating}",
-                    f"{num_terminating/num_states:.1%} of total",
-                    help="Number of states that terminate"
-                )
-            
-            with col2:
-                st.metric(
-                    "Total Transitions",
-                    f"{num_transitions}",
-                    help="Total number of non-zero transitions"
-                )
-                st.metric(
-                    "Avg. Outgoing Transitions",
-                    f"{avg_transitions:.2f}",
-                    help="Average number of outgoing transitions per state"
-                )
-            
-            with col3:
-                st.metric(
-                    "Transition Sparsity",
-                    f"{sparsity:.1%}",
-                    help="Percentage of zero transitions in the matrix"
-                )
-                st.metric(
-                    "Density",
-                    f"{1-sparsity:.1%}",
-                    help="Percentage of non-zero transitions in the matrix"
-                )
-
-            # Add a visual representation of the metrics
-            st.markdown("### 📈 System Characteristics")
-            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-            
-            # Pie chart for state types
-            ax1.pie([num_terminating, num_states - num_terminating],
-                   labels=['Terminating', 'Non-terminating'],
-                   autopct='%1.1f%%',
-                   colors=['lightblue', 'lightgreen'])
-            ax1.set_title('State Types Distribution')
-            
-            # Bar chart for transition metrics
-            metrics = ['Total States', 'Terminating States', 'Total Transitions', 'Avg. Transitions']
-            values = [num_states, num_terminating, num_transitions, avg_transitions]
-            ax2.bar(metrics, values, color=['lightblue', 'lightgreen', 'lightcoral', 'lightyellow'])
-            ax2.set_title('System Metrics')
-            plt.xticks(rotation=45)
-            plt.tight_layout()
-            
-            st.pyplot(fig)
-
-        with tab3:
             st.markdown("### 🧠 Probabilistic Transition System Comparison")
             
-            # Compute the minimized PTS
             R_0 = {(x, y) for x in range(len(T)) for y in range(len(T))}
             R_n = refine_relation(R_0, T, Term)
             equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, len(T), Term)
             minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
 
-            # Show visualizations first
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("#### 🎨 Original PTS")
-                graphviz_src = generate_graphviz_source(T, Term, labels, is_minimized=False)
+                if not labels:
+                    graphviz_src = f"""
+                    digraph G {{
+                        rankdir=LR;
+                        node [shape=circle, style=filled];
+                        {{
+                            node [color=lightgreen];
+                            {chr(10).join(f'"{i}" [label="{i}"];' for i in range(len(T)) if not Term[i])}
+                        }}
+                        {{
+                            node [color=lightblue, peripheries=2];
+                            {chr(10).join(f'"{i}" [label="{i}"];' for i in range(len(T)) if Term[i])}
+                        }}
+                        {chr(10).join(f'"{i}" -> "{j}" [label="{T[i,j]:.2f}"];' for i in range(len(T)) for j in range(len(T)) if T[i,j] > 0 and not Term[i])}
+                    }}
+                    """
+                else:
+                    graphviz_src = generate_graphviz_source(T, Term, labels, is_minimized=False)
                 st.graphviz_chart(graphviz_src)
             
             with col2:
                 st.markdown("#### 🎨 Minimized PTS")
-                minimized_graphviz_src = generate_graphviz_source(
-                    minimized_T, 
-                    list(class_termination_status.values()), 
-                    minimized_labels,
-                    is_minimized=True
-                )
+                if not minimized_labels:
+                    minimized_graphviz_src = f"""
+                    digraph G {{
+                        rankdir=LR;
+                        node [shape=circle, style=filled];
+                        {{
+                            node [color=lightgreen];
+                            {chr(10).join(f'"{i}" [label="Class {i}"];' for i in range(len(minimized_T)) if not list(class_termination_status.values())[i])}
+                        }}
+                        {{
+                            node [color=lightblue, peripheries=2];
+                            {chr(10).join(f'"{i}" [label="Class {i}"];' for i in range(len(minimized_T)) if list(class_termination_status.values())[i])}
+                        }}
+                        {chr(10).join(f'"{i}" -> "{j}" [label="{minimized_T[i,j]:.2f}"];' for i in range(len(minimized_T)) for j in range(len(minimized_T)) if minimized_T[i,j] > 0 and not list(class_termination_status.values())[i])}
+                    }}
+                    """
+                else:
+                    minimized_graphviz_src = generate_graphviz_source(
+                        minimized_T, 
+                        list(class_termination_status.values()), 
+                        minimized_labels,
+                        is_minimized=True
+                    )
                 st.graphviz_chart(minimized_graphviz_src)
 
             # Add bisimulation statistics in an expander
@@ -715,6 +794,78 @@ if T is not None and Term is not None and (input_mode == "Upload File" or all_la
                                          index=[f"Class {i+1}" for i in range(len(minimized_T))],
                                          columns=[f"Class {i+1}" for i in range(len(minimized_T))])
                 st.dataframe(minimized_df)
+
+        with tab3:
+            st.markdown("### 📊 Summary Statistics")
+            
+            # Calculate metrics
+            num_states = len(T)
+            num_terminating = sum(Term)
+            # Only count transitions from non-terminating states
+            num_transitions = sum(sum(row > 0) for i, row in enumerate(T) if not Term[i])
+            avg_transitions = num_transitions / (num_states - num_terminating)  # Average per non-terminating state
+            sparsity = 1 - (num_transitions / ((num_states - num_terminating) * num_states))  # Sparsity excluding terminating states
+            
+            # Create metrics in a grid layout
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                st.metric(
+                    "Number of States",
+                    f"{num_states}",
+                    help="Total number of states in the system"
+                )
+                st.metric(
+                    "Terminating States",
+                    f"{num_terminating}",
+                    f"{num_terminating/num_states:.1%} of total",
+                    help="Number of states that terminate"
+                )
+            
+            with col2:
+                st.metric(
+                    "Total Transitions",
+                    f"{num_transitions}",
+                    help="Total number of non-zero transitions"
+                )
+                st.metric(
+                    "Avg. Outgoing Transitions",
+                    f"{avg_transitions:.2f}",
+                    help="Average number of outgoing transitions per state"
+                )
+            
+            with col3:
+                st.metric(
+                    "Transition Sparsity",
+                    f"{sparsity:.1%}",
+                    help="Percentage of zero transitions in the matrix"
+                )
+                st.metric(
+                    "Density",
+                    f"{1-sparsity:.1%}",
+                    help="Percentage of non-zero transitions in the matrix"
+                )
+
+            # Add a visual representation of the metrics
+            st.markdown("### 📈 System Characteristics")
+            fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+            
+            # Pie chart for state types
+            ax1.pie([num_terminating, num_states - num_terminating],
+                   labels=['Terminating', 'Non-terminating'],
+                   autopct='%1.1f%%',
+                   colors=['lightblue', 'lightgreen'])
+            ax1.set_title('State Types Distribution')
+            
+            # Bar chart for transition metrics
+            metrics = ['Total States', 'Terminating States', 'Total Transitions', 'Avg. Transitions']
+            values = [num_states, num_terminating, num_transitions, avg_transitions]
+            ax2.bar(metrics, values, color=['lightblue', 'lightgreen', 'lightcoral', 'lightyellow'])
+            ax2.set_title('System Metrics')
+            plt.xticks(rotation=45)
+            plt.tight_layout()
+            
+            st.pyplot(fig)
 
         with tab4:
             st.markdown("## 📚 Theoretical Foundations")
