@@ -16,6 +16,23 @@ def test_single_class():
     assert len(classes) == 1
     assert set(classes[0]) == {0, 1, 2}
 
+def test_invalid_shape_raises_value_error():
+    # Make a 2×2 matrix but tell it there are 3 states → should raise the shape error
+    R = np.ones((2, 2), dtype=int)
+    Term = np.zeros(3, dtype=int)
+    with pytest.raises(ValueError) as exc:
+        compute_equivalence_classes(R, 3, Term)
+    assert "Relation matrix must be shape (3,3)" in str(exc.value)
+
+def test_invalid_entries_raises_value_error():
+    # A 2×2 but with a 2 in it, should trip the binary‐entry check
+    R = np.array([[1,2],[0,1]], dtype=int)
+    Term = np.zeros(2, dtype=int)
+    with pytest.raises(ValueError) as exc:
+        compute_equivalence_classes(R, 2, Term)
+    assert "Relation matrix must contain only 0 or 1 values" in str(exc.value)
+
+
 def test_disjoint_classes():
     """Test when states are in completely separate classes."""
     relation = np.array([[1, 0, 0], [0, 1, 0], [0, 0, 1]])

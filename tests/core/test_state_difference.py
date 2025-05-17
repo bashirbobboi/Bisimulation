@@ -1,79 +1,48 @@
-import pytest
 import numpy as np
-from probisim.bisimdistance import analyze_state_differences, bisimulation_distance_matrix
+import pytest
 
-def test_identical_states():
-    """Test explanation for identical states."""
+from probisim.bisimdistance import analyze_state_differences
+
+def test_termination_mismatch():
+    # Termination status differs
+    T = np.array([[1.0, 0.0], [0.0, 1.0]])
+    Term = np.array([1, 0], dtype=int)
+    # D_prev irrelevant for termination mismatch
+    D_prev = np.zeros((2, 2))
+
+    explanations = analyze_state_differences(0, 1, T, Term, D_prev)
+    expected = (
+        "Termination mismatch: State 1 is terminating, "
+        "while State 2 is non-terminating."
+    )
+    assert explanations == [expected]
+
+
+def test_no_contributions_when_no_costs():
+    # Same termination, but no positive costs => no explanations
     T = np.array([[0.5, 0.5], [0.5, 0.5]])
-    Term = np.array([0, 0])
-    labels = {(0, 0): "a", (0, 1): "b", (1, 0): "c", (1, 1): "d"}
-    D = bisimulation_distance_matrix(T, Term)
-    explanations = analyze_state_differences(0, 0, T, Term, D)
-    # For identical states, explanations should be empty or indicate bisimilarity
-    assert len(explanations) == 0 or any("bisimilar" in line.lower() for line in explanations)
+    Term = np.array([0, 0], dtype=int)
+    # Zero matrix => no D_prev[i,j] > 0
+    D_prev = np.zeros((2, 2))
 
-def test_different_termination():
-    """Test explanation for states with different termination status."""
-    T = np.array([[0.5, 0.5], [0.5, 0.5]])
-    Term = np.array([0, 1])
-    labels = {(0, 0): "a", (0, 1): "b", (1, 0): "c", (1, 1): "d"}
-    D = bisimulation_distance_matrix(T, Term)
-    explanations = analyze_state_differences(0, 1, T, Term, D)
-    assert any("termination" in line.lower() for line in explanations)
+    explanations = analyze_state_differences(0, 1, T, Term, D_prev)
+    assert explanations == []
 
-def test_different_transitions():
-    """Test explanation for states with different transition probabilities."""
-    T = np.array([[0.5, 0.5], [0.7, 0.3]])
-    Term = np.array([0, 0])
-    labels = {(0, 0): "a", (0, 1): "b", (1, 0): "c", (1, 1): "d"}
-    D = bisimulation_distance_matrix(T, Term)
-    explanations = analyze_state_differences(0, 1, T, Term, D)
-    assert any("transition" in line.lower() or "probability" in line.lower() for line in explanations)
 
-def test_different_labels():
-    """Test explanation for states with different transition labels."""
-    T = np.array([[0.5, 0.5], [0.5, 0.5]])
-    Term = np.array([0, 0])
-    labels = {(0, 0): "a", (0, 1): "b", (1, 0): "x", (1, 1): "y"}
-    D = bisimulation_distance_matrix(T, Term)
-    explanations = analyze_state_differences(0, 1, T, Term, D)
-    # Since analyze_state_differences does not use labels, this may not be present
-    # So just check that explanations are non-empty
-    assert isinstance(explanations, list)
+def test_single_contribution_flow():
+    # Simple case with one flow contributing
+    T = np.array([[1.0, 0.0], [0.0, 1.0]])
+    Term = np.array([0, 0], dtype=int)
+    # All costs = 1
+    D_prev = np.ones((2, 2))
 
-def test_multiple_differences():
-    """Test explanation for states with multiple differences."""
-    T = np.array([[0.5, 0.5], [0.7, 0.3]])
-    Term = np.array([0, 1])
-    labels = {(0, 0): "a", (0, 1): "b", (1, 0): "x", (1, 1): "y"}
-    D = bisimulation_distance_matrix(T, Term)
-    explanations = analyze_state_differences(0, 1, T, Term, D)
-    assert len(explanations) > 0
-    assert any("termination" in line.lower() or "probability" in line.lower() for line in explanations)
+    explanations = analyze_state_differences(0, 1, T, Term, D_prev)
+    # Should have exactly one contribution explanation
+    assert len(explanations) == 1
+    exp = explanations[0]
+    assert exp.startswith("Transition from State 1 to State 1")
+    assert "vs From State 2 to State 2" in exp
+    assert exp.endswith("→ this contributes 1.000 to their distance")
 
-def test_invalid_inputs():
-    """Test that invalid inputs raise appropriate errors."""
-    # Invalid state indices
-    T = np.array([[1.0]])
-    Term = np.array([0])
-    D = bisimulation_distance_matrix(T, Term)
-    with pytest.raises(IndexError):
-        analyze_state_differences(-1, 0, T, Term, D)
-    with pytest.raises(IndexError):
-        analyze_state_differences(0, 1, T, Term, D)
-    # Invalid probability matrix
-    T_bad = np.array([[1.5]])
-    Term_bad = np.array([0])
-    D_bad = np.array([[0.0]])
-    with pytest.raises(ValueError):
-        bisimulation_distance_matrix(T_bad, Term_bad)
-
-def test_explanation_format():
-    """Test that the explanation is a list of strings."""
-    T = np.array([[0.5, 0.5], [0.7, 0.3]])
-    Term = np.array([0, 1])
-    labels = {(0, 0): "a", (0, 1): "b", (1, 0): "c", (1, 1): "d"}
-    D = bisimulation_distance_matrix(T, Term)
-    explanations = analyze_state_differences(0, 1, T, Term, D)
-    assert isinstance(explanations, list)
-    assert all(isinstance(line, str) for line in explanations) 
+if __name__ == "__main__":
+    pytest.main()

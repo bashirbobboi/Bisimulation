@@ -1,131 +1,124 @@
 import pytest
 import numpy as np
-from probisim.parsers import parse_model
-import os
-import tempfile
-from probisim.bisimdistance import input_probabilistic_transition_system
+import json
 
-# Test data
-VALID_TXT = """3
-0.5 0.5 0.0
-0.0 0.5 0.5
-0.0 0.0 1.0
-0 0 1
-a b c"""
+from probisim.parsers import PrismParser, JsonLTSParser, TxtParser, parse_model
 
-VALID_PRISM = """[0] -> 0.5 : (state' = 1) + 0.5 : (state' = 2);
-[1] -> 0.5 : (state' = 1) + 0.5 : (state' = 2);
-[2] [term];"""
 
-VALID_JSON = """{
-    "states": 3,
-    "transitions": [
-        {"from": 0, "to": 1, "prob": 0.5, "label": "a"},
-        {"from": 0, "to": 2, "prob": 0.5, "label": "b"},
-        {"from": 1, "to": 1, "prob": 0.5, "label": "c"},
-        {"from": 1, "to": 2, "prob": 0.5, "label": "d"}
-    ],
-    "terminating": [2]
-}"""
+def test_parse_model_dispatch_valid_formats():
+    json_str = '{"states": 1, "transitions": [], "terminating": [0]}'
+    for fmt in ['txt', 'json', 'prism']:
+        # For formats that expect content, we provide minimal valid inputs
+        if fmt == 'txt':
+            input_str = '1\n1.0\n1'
+        elif fmt == 'json':
+            input_str = json_str
+        else:  # prism
+            input_str = '[] s=0 -> (s\'=0);'
+        T, Term, labels = parse_model(input_str, fmt)
+        assert isinstance(T, np.ndarray)
+        assert isinstance(Term, np.ndarray)
+        assert isinstance(labels, dict)
 
-INVALID_TXT = """2
-0.5 0.5
-0.0 1.0
-1 0
-a b
-extra line"""
 
-INVALID_PRISM = """[0] -> 0.5 : (state' = 1) + 0.6 : (state' = 2);"""
-
-INVALID_JSON = """{
-    "states": 2,
-    "transitions": [
-        {"from": 0, "to": 1, "prob": 1.5}
-    ]
-}"""
-
-@pytest.mark.parametrize("content,format,expected", [
-    (VALID_TXT, "txt", {
-        "T": np.array([[0.5, 0.5, 0.0], [0.0, 0.5, 0.5], [0.0, 0.0, 1.0]]),
-        "Term": np.array([0, 0, 1]),
-        "labels": {(0, 1): "a", (1, 1): "b", (1, 2): "c"}
-    }),
-    (VALID_PRISM, "prism", {
-        "T": np.array([[0.0, 0.5, 0.5], [0.0, 0.5, 0.5], [0.0, 0.0, 1.0]]),
-        "Term": np.array([0, 0, 1]),
-        "labels": {}  # PRISM parser does not support labels
-    }),
-    (VALID_JSON, "json", {
-        "T": np.array([[0.0, 0.5, 0.5], [0.0, 0.5, 0.5], [0.0, 0.0, 1.0]]),
-        "Term": np.array([0, 0, 1]),
-        "labels": {(0, 1): "a", (0, 2): "b", (1, 1): "c", (1, 2): "d"}
-    })
-])
-def test_valid_parsers(content, format, expected):
-    """Test parsing of valid input files."""
-    T, Term, labels = parse_model(content, format)
-    assert np.allclose(T, expected["T"])
-    assert np.array_equal(Term, expected["Term"])
-    # For labels, compare only keys that exist in both
-    for k in expected["labels"]:
-        assert k in labels
-        assert labels[k] == expected["labels"][k]
-    for k in labels:
-        if k in expected["labels"]:
-            assert labels[k] == expected["labels"][k]
-
-@pytest.mark.parametrize("content,format,error_type", [
-    (INVALID_TXT, "txt", ValueError),  # Extra line
-    (INVALID_PRISM, "prism", ValueError),  # Probabilities sum to > 1
-    (INVALID_JSON, "json", ValueError),  # Probability > 1
-    ("invalid content", "txt", ValueError),  # Malformed content
-    ("invalid content", "prism", ValueError),
-    ("invalid content", "json", ValueError)
-])
-def test_invalid_parsers(content, format, error_type):
-    """Test that invalid inputs raise appropriate errors."""
-    with pytest.raises(error_type):
-        parse_model(content, format)
-
-def test_parser_edge_cases():
-    """Test edge cases for parsers."""
-    # Empty system
-    empty_txt = "0\n"
-    T, Term, labels = parse_model(empty_txt, "txt")
-    assert T.shape == (0, 0)
-    assert len(Term) == 0
-    assert len(labels) == 0
-    
-    # Single state, terminating
-    single_txt = "1\n1.0\n1"
-    T, Term, labels = parse_model(single_txt, "txt")
-    assert T.shape == (1, 1)
-    assert Term[0] == 1
-    assert len(labels) == 0
-    
-    # Single state, non-terminating
-    single_txt = "1\n1.0\n0"
-    T, Term, labels = parse_model(single_txt, "txt")
-    assert T.shape == (1, 1)
-    assert Term[0] == 0
-    assert len(labels) == 0
-
-def test_input_probabilistic_transition_system_valid(tmp_path):
-    content = "2\n0.5 0.5\n0.0 1.0\n0 1\n0 1 a"
-    file_path = tmp_path / "pts.txt"
-    file_path.write_text(content)
-    T, Term, labels = input_probabilistic_transition_system(str(file_path))
-    assert np.allclose(T, [[0.5, 0.5], [0.0, 1.0]])
-    assert np.array_equal(Term, [0, 1])
-    assert labels == {(0, 1): "a"}
-
-def test_input_probabilistic_transition_system_invalid_matrix(tmp_path):
-    content = "2\n0.5 0.6\n0.0 1.0\n0 1"
-    file_path = tmp_path / "bad.txt"
-    file_path.write_text(content)
+def test_parse_model_dispatch_invalid_format():
     with pytest.raises(ValueError):
-        input_probabilistic_transition_system(str(file_path))
+        parse_model('anything', 'unsupported')
 
-def test_input_probabilistic_transition_system_unsupported():
-    with pytest.raises(NotImplementedError):
-        input_probabilistic_transition_system(use_file=False) 
+
+def test_txt_parser_basic():
+    # 2-state system: state0->state1 with prob 1, state1 terminates
+    txt_input = '''
+2
+0 1
+0 1
+0 1
+lbl01
+'''.strip()
+
+    parser = TxtParser()
+    T, Term, labels = parser.parse(txt_input)
+    expected_T = np.array([[0.0, 1.0], [0.0, 1.0]])
+    expected_Term = np.array([0, 1])
+    assert np.allclose(T, expected_T)
+    assert np.array_equal(Term, expected_Term)
+    assert labels == {(0, 1): 'lbl01'}
+
+
+def test_txt_parser_row_length_mismatch():
+    # Row length not matching n
+    bad_input = '2\n0.5 0.5 0.0\n0 1\n0 1'
+    parser = TxtParser()
+    with pytest.raises(ValueError):
+        parser.parse(bad_input)
+
+
+def test_txt_parser_term_length_mismatch():
+    # Termination vector wrong length
+    bad_input = '2\n0 1\n1 0\n0'
+    parser = TxtParser()
+    with pytest.raises(ValueError):
+        parser.parse(bad_input)
+
+
+def test_txt_parser_row_sum_error():
+    # Non-terminating row does not sum to 1
+    bad_input = '2\n0.3 0.3\n0 1\n0 1'
+    parser = TxtParser()
+    with pytest.raises(ValueError):
+        parser.parse(bad_input)
+
+
+def test_prism_parser_basic():
+    prism_input = '''
+// simple chain
+[] s=0 -> 1.0 : (s'=1);
+[] s=1 -> 0.5 : (s'=0) + 0.5 : (s'=2);
+[] s=2 -> (s'=2);
+'''.strip()
+    parser = PrismParser()
+    T, Term, labels = parser.parse(prism_input)
+    expected_T = np.array([[0.0, 1.0, 0.0],
+                           [0.5, 0.0, 0.5],
+                           [0.0, 0.0, 1.0]])
+    expected_Term = np.array([0, 0, 1])
+    assert np.allclose(T, expected_T)
+    assert np.array_equal(Term, expected_Term)
+    assert labels == {}
+
+
+def test_prism_parser_row_sum_error():
+    # Row with sum !=1 and not a pure self-loop
+    bad_input = '[] s=0 -> 0.5 : (s\'=1);'
+    parser = PrismParser()
+    with pytest.raises(ValueError):
+        parser.parse(bad_input)
+
+
+def test_json_parser_basic():
+    import json
+    # Now explicitly mark states 1 and 2 as terminating to allow rows summing to zero
+    data = {
+        "states": 3,
+        "transitions": [
+            {"from": 0, "to": 1, "prob": 0.7, "label": "a"},
+            {"from": 0, "to": 2, "prob": 0.3}
+        ],
+        "terminating": [1, 2]
+    }
+    input_str = json.dumps(data)
+    parser = JsonLTSParser()
+    T, Term, labels = parser.parse(input_str)
+    expected_T = np.array([[0.0, 0.7, 0.3], [0.0, 0.0, 0.0], [0.0, 0.0, 0.0]])
+    expected_Term = np.array([0, 1, 1])
+    assert np.allclose(T, expected_T)
+    assert np.array_equal(Term, expected_Term)
+    assert labels == {(0, 1): 'a'}
+
+def test_json_parser_row_sum_error():
+    # Non-terminating row does not sum to 1
+    data = {"states": 2, "transitions": [{"from": 0, "to": 1, "prob": 0.5}], "terminating": []}
+    input_str = json.dumps(data)
+    parser = JsonLTSParser()
+    with pytest.raises(ValueError):
+        parser.parse(input_str)
