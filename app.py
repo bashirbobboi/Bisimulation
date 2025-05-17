@@ -15,6 +15,7 @@ from bisimdistance import (
 )
 import pandas as pd
 import time
+from parsers import parse_model  # <-- NEW IMPORT
 
 # Create necessary directories if they don't exist
 Path("txt").mkdir(exist_ok=True)
@@ -227,61 +228,91 @@ if input_mode == "Benchmark Datasets":
                 all_labels_filled = False
 
 elif input_mode == "Upload File":
-    uploaded_file = st.file_uploader("📁 Upload your transition matrix file (.txt)", type="txt")
+    # --- Model format selection ---
+    st.markdown("#### Model Format")
+    model_format = st.selectbox(
+        "Choose model format:",
+        ["txt (legacy)", "prism", "json"],
+        help="Select the format of your uploaded model file. 'txt' is the legacy format; others use the pluggable parser."
+    )
+
+    if 'last_format' not in st.session_state:
+        st.session_state.last_format = model_format
+
+    # If the user changes the format, clear the uploaded file
+    if model_format != st.session_state.last_format:
+        st.session_state['uploaded_file'] = None
+        st.session_state.last_format = model_format
+
+    # Use a dynamic key for the file uploader so it resets on format change
+    uploaded_file = st.file_uploader(
+        "📁 Upload your model file",
+        type=["txt", "pm", "json"],
+        key=f"uploaded_file_{model_format}"
+    )
     if uploaded_file:
         content = uploaded_file.read().decode("utf-8")
         temp_path = os.path.join("txt", "temp_input.txt")
         with open(temp_path, "w", encoding="utf-8") as f:
             f.write(content)
         try:
-            T, Term, labels = input_probabilistic_transition_system(filename=temp_path, use_file=True)
+            if model_format == "txt (legacy)":
+                T, Term, labels = input_probabilistic_transition_system(filename=temp_path, use_file=True)
+            else:
+                fmt = model_format if model_format != "txt (legacy)" else "txt"
+                T, Term, labels = parse_model(content, fmt)
             st.success("✅ File successfully loaded and parsed.")
-            # Set session state to indicate file was uploaded
             st.session_state.file_uploaded = True
         except Exception as e:
             st.error(f"❌ Error loading file: {e}")
             st.session_state.file_uploaded = False
     else:
-        st.session_state.file_uploaded = False
+        st.info("Please upload a file in the selected format.")
 
     # Display help section for file upload
     with st.expander("📝 File Format Help", expanded=not st.session_state.get('file_uploaded', False)):
         st.markdown("""
-        ### Expected File Format
-        Your input file should follow this format:
-        
-        1. First line: Number of states (n)
-        2. Next n lines: Transition matrix (each row must sum to 1)
-        3. Next n lines: Terminating states (0 or 1)
-        4. Remaining lines: Transition labels (optional)
-        
-        ### Example:
-        ```
-        3
-        0.5 0.3 0.2
-        0.2 0.6 0.2
-        0.1 0.4 0.5
-        0
-        1
-        0
-        1 2 a
-        2 3 b
-        ```
-        
-        ### Notes:
-        - Each row of the transition matrix must sum to 1
-        - Terminating states are marked with 1, non-terminating with 0
-        - Transition labels are optional and in format: `from_state to_state label`
-        - States are numbered starting from 1 in the file
+        ### Supported Model Formats
+        - **txt (legacy):**
+            - First line: Number of states (n)
+            - Next n lines: Transition matrix (each row must sum to 1)
+            - Next n lines: Terminating states (0 or 1)
+            - Remaining lines: Transition labels (optional)
+            - States are 1-based in the file
+        - **prism:**
+            - PRISM .pm DTMC subset, 0-based states, e.g.:
+            ```
+            [0] -> 0.5 : (state' = 1) + 0.5 : (state' = 2);
+            [1] -> 1.0 : (state' = 0);
+            [2] [term];
+            ```
+            - Use [term] annotation or omit outgoing transitions for termination
+        - **json:**
+            - JSON LTS, 0-based states, e.g.:
+            ```json
+            {
+              "states": 3,
+              "transitions": [
+                {"from": 0, "to": 1, "prob": 0.5, "label": "a"},
+                {"from": 0, "to": 2, "prob": 0.5}
+              ],
+              "terminating": [2]
+            }
+            ```
         """)
-    
 
 elif input_mode == "Manual Input":
     with st.sidebar:
         st.markdown("### 🛠️ Define Transition Matrix")
-        n = st.number_input("Number of states", min_value=2, max_value=15, step=1)
-        matrix = []
-        valid = True
+        manual_format = st.selectbox(
+            "Model Format",
+            ["txt (legacy)", "prism", "json"],
+            help="Choose the format for manual input."
+        )
+        if manual_format == "txt (legacy)":
+            n = st.number_input("Number of states", min_value=2, max_value=15, step=1)
+            matrix = []
+            valid = True
 
     # Create columns for matrix input
     cols = st.columns(min(n, 3))  # Show max 3 columns at a time
@@ -1084,6 +1115,263 @@ digraph G {{
                         else:
                             run_str += " (Max Steps)"
                         st.text(f"Run {i+1}: {run_str}")
+            
+            st.markdown("---")
+            st.markdown("### 🔄 Comparative Simulation")
+            st.markdown("Compare runs from two different initial states side by side")
+            
+            comp_col1, comp_col2 = st.columns(2)
+            with comp_col1:
+                state1 = st.selectbox(
+                    "First Initial State",
+                    [f"State {i+1}" for i in range(len(T))],
+                    help="Choose the first starting state for comparison"
+                )
+                num_comparative_runs = st.number_input(
+                    "Number of Comparative Runs",
+                    min_value=1,
+                    max_value=50,
+                    value=10,
+                    help="Number of runs to show for each state"
+                )
+            
+            with comp_col2:
+                state2 = st.selectbox(
+                    "Second Initial State",
+                    [f"State {i+1}" for i in range(len(T))],
+                    help="Choose the second starting state for comparison"
+                )
+                run_speed = st.slider(
+                    "Animation Speed (ms)",
+                    min_value=100,
+                    max_value=2000,
+                    value=500,
+                    step=100,
+                    help="Time between steps in milliseconds"
+                )
+            
+            if st.button("Run Comparative Simulation"):
+                # Convert states to 0-based indices
+                state1_idx = int(state1.split()[1]) - 1
+                state2_idx = int(state2.split()[1]) - 1
+                
+                # Create containers for the runs
+                run_container1 = st.container()
+                run_container2 = st.container()
+                
+                # Run simulations
+                for run in range(num_comparative_runs):
+                    # Initialize runs
+                    run1 = [state1_idx]
+                    run2 = [state2_idx]
+                    steps1 = steps2 = 0
+                    state1_current = state1_idx
+                    state2_current = state2_idx
+                    
+                    # Run until both reach termination or max steps
+                    while (steps1 < max_steps or steps2 < max_steps) and \
+                          (not Term[state1_current] or not Term[state2_current]):
+                        
+                        # Update first run if not terminated
+                        if not Term[state1_current] and steps1 < max_steps:
+                            next_state1 = np.random.choice(len(T), p=T[state1_current])
+                            run1.append(next_state1)
+                            state1_current = next_state1
+                            steps1 += 1
+                        
+                        # Update second run if not terminated
+                        if not Term[state2_current] and steps2 < max_steps:
+                            next_state2 = np.random.choice(len(T), p=T[state2_current])
+                            run2.append(next_state2)
+                            state2_current = next_state2
+                            steps2 += 1
+                    
+                    # Display the runs side by side
+                    with run_container1:
+                        col1, col2 = st.columns(2)
+                        with col1:
+                            st.markdown(f"**Run {run+1} from {state1}:**")
+                            run_str1 = " → ".join([f"S{s+1}" for s in run1])
+                            if Term[run1[-1]]:
+                                run_str1 += " (Terminated)"
+                            else:
+                                run_str1 += " (Max Steps)"
+                            st.text(run_str1)
+                        
+                        with col2:
+                            st.markdown(f"**Run {run+1} from {state2}:**")
+                            run_str2 = " → ".join([f"S{s+1}" for s in run2])
+                            if Term[run2[-1]]:
+                                run_str2 += " (Terminated)"
+                            else:
+                                run_str2 += " (Max Steps)"
+                            st.text(run_str2)
+                    
+                    # Add a small delay between runs
+                    time.sleep(run_speed / 1000)
+                
+                # Add comparative statistics and visualizations
+                st.markdown("### 📊 Comparative Analysis")
+                
+                # Collect statistics across all runs
+                all_runs1 = []
+                all_runs2 = []
+                termination_steps1 = []
+                termination_steps2 = []
+                state_visits1 = np.zeros(len(T))
+                state_visits2 = np.zeros(len(T))
+                
+                # Run additional simulations for statistics
+                for _ in range(100):  # Run 100 simulations for better statistics
+                    # Run from first state
+                    run1 = [state1_idx]
+                    steps1 = 0
+                    state1_current = state1_idx
+                    while steps1 < max_steps and not Term[state1_current]:
+                        state_visits1[state1_current] += 1
+                        next_state1 = np.random.choice(len(T), p=T[state1_current])
+                        run1.append(next_state1)
+                        state1_current = next_state1
+                        steps1 += 1
+                    all_runs1.append(run1)
+                    termination_steps1.append(steps1)
+                    
+                    # Run from second state
+                    run2 = [state2_idx]
+                    steps2 = 0
+                    state2_current = state2_idx
+                    while steps2 < max_steps and not Term[state2_current]:
+                        state_visits2[state2_current] += 1
+                        next_state2 = np.random.choice(len(T), p=T[state2_current])
+                        run2.append(next_state2)
+                        state2_current = next_state2
+                        steps2 += 1
+                    all_runs2.append(run2)
+                    termination_steps2.append(steps2)
+                
+                # Calculate statistics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric(
+                        "Average Steps to Termination",
+                        f"{np.mean(termination_steps1):.1f} vs {np.mean(termination_steps2):.1f}",
+                        f"{np.mean(termination_steps2) - np.mean(termination_steps1):.1f}",
+                        help="Average number of steps before termination for each state"
+                    )
+                with col2:
+                    term_rate1 = np.mean([s < max_steps for s in termination_steps1])
+                    term_rate2 = np.mean([s < max_steps for s in termination_steps2])
+                    st.metric(
+                        "Termination Rate",
+                        f"{term_rate1:.1%} vs {term_rate2:.1%}",
+                        f"{term_rate2 - term_rate1:.1%}",
+                        help="Percentage of runs that reached termination"
+                    )
+                with col3:
+                    st.metric(
+                        "Max Steps Reached",
+                        f"{max(termination_steps1)} vs {max(termination_steps2)}",
+                        f"{max(termination_steps2) - max(termination_steps1)}",
+                        help="Maximum steps taken in any run"
+                    )
+                
+                # Visualizations
+                st.markdown("#### 📈 Comparative Visualizations")
+                
+                # Create tabs for different visualizations
+                viz_tab1, viz_tab2, viz_tab3 = st.tabs([
+                    "Steps Distribution",
+                    "State Visit Patterns",
+                    "Path Divergence"
+                ])
+                
+                with viz_tab1:
+                    # Steps to termination distribution
+                    fig, ax = plt.subplots(figsize=(10, 4))
+                    sns.kdeplot(data=termination_steps1, label=f"From {state1}", ax=ax)
+                    sns.kdeplot(data=termination_steps2, label=f"From {state2}", ax=ax)
+                    ax.set_title('Distribution of Steps to Termination')
+                    ax.set_xlabel('Steps')
+                    ax.set_ylabel('Density')
+                    ax.legend()
+                    st.pyplot(fig)
+                
+                with viz_tab2:
+                    # State visit patterns
+                    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
+                    
+                    # Normalize visit counts
+                    visits1 = state_visits1 / len(all_runs1)
+                    visits2 = state_visits2 / len(all_runs2)
+                    
+                    # Plot visit frequencies
+                    df_visits = pd.DataFrame({
+                        'State': [f"State {i+1}" for i in range(len(T))] * 2,
+                        'Visits': np.concatenate([visits1, visits2]),
+                        'Source': [state1] * len(T) + [state2] * len(T)
+                    })
+                    
+                    sns.barplot(data=df_visits, x='State', y='Visits', hue='Source', ax=ax1)
+                    ax1.set_title('State Visit Frequency Comparison')
+                    ax1.set_xlabel('State')
+                    ax1.set_ylabel('Average Visits per Run')
+                    plt.xticks(rotation=45)
+                    
+                    # Plot visit difference
+                    visit_diff = visits2 - visits1
+                    sns.barplot(x=[f"State {i+1}" for i in range(len(T))], y=visit_diff, ax=ax2)
+                    ax2.set_title('Difference in Visit Frequency')
+                    ax2.set_xlabel('State')
+                    ax2.set_ylabel('Visit Difference (State 2 - State 1)')
+                    plt.xticks(rotation=45)
+                    
+                    plt.tight_layout()
+                    st.pyplot(fig)
+                
+                with viz_tab3:
+                    # Path divergence analysis
+                    # Calculate average path length for each state
+                    avg_len1 = np.mean([len(run) for run in all_runs1])
+                    avg_len2 = np.mean([len(run) for run in all_runs2])
+                    
+                    # Calculate state transition probabilities
+                    trans1 = np.zeros((len(T), len(T)))
+                    trans2 = np.zeros((len(T), len(T)))
+                    
+                    for run in all_runs1:
+                        for i in range(len(run)-1):
+                            trans1[run[i], run[i+1]] += 1
+                    for run in all_runs2:
+                        for i in range(len(run)-1):
+                            trans2[run[i], run[i+1]] += 1
+                    
+                    # Normalize transition matrices
+                    trans1 = trans1 / np.sum(trans1, axis=1, keepdims=True)
+                    trans2 = trans2 / np.sum(trans2, axis=1, keepdims=True)
+                    
+                    # Calculate transition difference
+                    trans_diff = trans2 - trans1
+                    
+                    # Plot transition difference heatmap
+                    fig, ax = plt.subplots(figsize=(8, 6))
+                    sns.heatmap(trans_diff, 
+                              cmap='RdBu_r',
+                              center=0,
+                              annot=True,
+                              fmt='.2f',
+                              xticklabels=[f"S{i+1}" for i in range(len(T))],
+                              yticklabels=[f"S{i+1}" for i in range(len(T))],
+                              ax=ax)
+                    ax.set_title('Difference in Transition Probabilities\n(State 2 - State 1)')
+                    st.pyplot(fig)
+                    
+                    # Add interpretation
+                    st.markdown("""
+                    **Interpretation:**
+                    - Positive values (red) indicate higher transition probability from State 2
+                    - Negative values (blue) indicate higher transition probability from State 1
+                    - The intensity of the color shows the magnitude of the difference
+                    """)
 
         with tab5:
             st.markdown("## 📚 Theoretical Foundations")
