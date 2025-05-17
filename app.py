@@ -4,7 +4,7 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import os
 from pathlib import Path
-from bisimdistance import (
+from probisim.bisimdistance import (
     input_probabilistic_transition_system,
     refine_relation,
     compute_equivalence_classes,
@@ -15,7 +15,7 @@ from bisimdistance import (
 )
 import pandas as pd
 import time
-from parsers import parse_model  # <-- NEW IMPORT
+from probisim.parsers import parse_model  # <-- NEW IMPORT
 
 # Create necessary directories if they don't exist
 Path("txt").mkdir(exist_ok=True)
