@@ -63,23 +63,64 @@ def refine_relation(R, transition_matrix, terminating_vector):
     return R
 
 def compute_equivalence_classes(R, num_states, terminating_vector):
+    """
+    Given a 0/1 relation matrix R of shape (n,n), partition {0,…,n-1}
+    into connected components under R.  Also compute a map from each
+    state to its class ID and record whether any member of each class
+    is terminating.
+    """
+    R = np.asarray(R)
+
+    # --- 1) Handle the empty-system corner --- #
+    if num_states == 0:
+        return {}, {}, {}
+
+    # --- 2) Basic sanity checks on R --- #
+    if R.shape != (num_states, num_states):
+        raise ValueError(f"Relation matrix must be shape ({num_states},{num_states})")
+    if not np.all((R == 0) | (R == 1)):
+        raise ValueError("Relation matrix must contain only 0 or 1 values")
+    # Reflexivity
+    if not np.all(np.diag(R) == 1):
+        raise ValueError("Relation must be reflexive (all diagonal entries = 1)")
+    # Symmetry
+    if not np.all(R == R.T):
+        raise ValueError("Relation must be symmetric")
+
+    # --- 3) Find connected components via DFS/BFS --- #
+    visited = set()
     equivalence_classes = {}
-    state_class_map = {}
+    state_class_map    = {}
     class_termination_status = {}
-    for x in range(num_states):
-        found = False
-        for class_id, class_states in equivalence_classes.items():
-            if (x, next(iter(class_states))) in R:
-                equivalence_classes[class_id].add(x)
-                state_class_map[x] = class_id
-                found = True
-                break
-        if not found:
-            new_class_id = len(equivalence_classes)
-            equivalence_classes[new_class_id] = {x}
-            state_class_map[x] = new_class_id
-    for class_id, class_states in equivalence_classes.items():
-        class_termination_status[class_id] = any(terminating_vector[state] == 1 for state in class_states)
+
+    class_id = 0
+    for i in range(num_states):
+        if i in visited:
+            continue
+
+        # grow a new component starting from i
+        comp = set()
+        stack = [i]
+        while stack:
+            u = stack.pop()
+            if u in comp:
+                continue
+            comp.add(u)
+            # neighbors are all j with R[u,j] == 1
+            for j in np.where(R[u] == 1)[0]:
+                if j not in comp:
+                    stack.append(j)
+
+        # register this class
+        equivalence_classes[class_id] = comp
+        for s in comp:
+            state_class_map[s] = class_id
+        # any member terminating?
+        class_termination_status[class_id] = any(terminating_vector[s] == 1 for s in comp)
+
+        visited |= comp
+        class_id += 1
+
     return equivalence_classes, state_class_map, class_termination_status
 
 def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels):

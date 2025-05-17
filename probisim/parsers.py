@@ -90,16 +90,53 @@ class JsonLTSParser(ModelParser):
                 raise ValueError(f"Row {s} must sum to 1 for non-terminating states")
         return T, Term, labels
 
+class TxtParser(ModelParser):
+    """
+    Legacy TXT parser.
+    Format:
+    n\n<row1>\n<row2>...\n<rown>\n<term1> ... <termn>\n<labels...> (optional)
+    """
+    def parse(self, input_str):
+        lines = [l.strip() for l in input_str.splitlines() if l.strip() and not l.strip().startswith('#')]
+        n = int(lines[0])
+        T = np.zeros((n, n))
+        for i in range(n):
+            row = list(map(float, lines[1 + i].split()))
+            if len(row) != n:
+                raise ValueError(f"Row {i} must have {n} entries.")
+            T[i] = row
+        Term = np.array(list(map(int, lines[1 + n].split())), dtype=int)
+        if len(Term) != n:
+            raise ValueError("Terminating vector length mismatch.")
+        labels = {}
+        if len(lines) > 2 + n:
+            # Support both space-separated and one-per-line
+            label_line = lines[2 + n]
+            label_tokens = label_line.split()
+            idx = 0
+            for i in range(n):
+                for j in range(n):
+                    if T[i, j] > 0:
+                        if idx < len(label_tokens):
+                            labels[(i, j)] = label_tokens[idx]
+                            idx += 1
+        # Validation
+        for s in range(n):
+            if Term[s] == 0 and abs(T[s].sum() - 1.0) > 1e-6:
+                raise ValueError(f"Row {s} must sum to 1 for non-terminating states")
+        return T, Term, labels
+
 # Registry for pluggable parsers
 PARSER_REGISTRY = {
     'prism': PrismParser(),
     'json': JsonLTSParser(),
+    'txt': TxtParser(),
 }
 
 def parse_model(input_str, fmt):
     """
     Dispatch to the correct parser based on format string.
-    fmt: 'prism' or 'json'
+    fmt: 'prism' or 'json' or 'txt'
     Returns (T, Term, labels) as 0-based numpy arrays.
     """
     if fmt not in PARSER_REGISTRY:

@@ -384,7 +384,11 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
         start_min = time.time()
         R_0 = {(x, y) for x in range(len(T)) for y in range(len(T))}
         R_n = refine_relation(R_0, T, Term)
-        equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, len(T), Term)
+        n = len(T)
+        R_mat = np.zeros((n, n), dtype=int)
+        for i, j in R_n:
+            R_mat[i, j] = 1
+        equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
         minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
         end_min = time.time()
         min_time = end_min - start_min
