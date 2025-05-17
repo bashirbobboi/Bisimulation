@@ -396,52 +396,54 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                 - Which differences contribute most to their distance
                 """)
                 
+                state_options = ["Select a state..."] + [f"State {i+1}" for i in range(len(D))]
                 col1, col2 = st.columns(2)
                 with col1:
-                    state1 = st.selectbox("Select first state", 
-                                        [f"State {i+1}" for i in range(len(D))],
-                                        key="state1",
-                                        help="Choose the first state to compare")
+                    state1 = st.selectbox("Select first state", state_options, key=f"state1_{len(D)}")
                 with col2:
-                    state2 = st.selectbox("Select second state", 
-                                        [f"State {i+1}" for i in range(len(D))],
-                                        key="state2",
-                                        help="Choose the second state to compare")
+                    state2 = st.selectbox("Select second state", state_options, key=f"state2_{len(D)}")
                 
-                idx1 = int(state1.split()[1]) - 1
-                idx2 = int(state2.split()[1]) - 1
-                
-                explanations = analyze_state_differences(idx1, idx2, T, Term, D)
-                
-                st.markdown(f"#### Distance between {state1} and {state2}: {D[idx1, idx2]:.3f}")
-                
-                if idx1 == idx2:
-                    st.info(f"You're comparing {state1} with itself! The distance is always 0 because:")
-                    st.markdown("""
-                    - It's the same state
-                    - States always have identical behavior to themselves
-                    - This is called the reflexive property of bisimulation
-                    """)
-                elif D[idx1, idx2] == 0:
-                    st.success(f"These states are bisimilar (identical behavior)! They have:")
-                    st.markdown("""
-                    - The same termination behavior
-                    - Identical transition probabilities to all states
-                    - No behavioral differences
-                    """)
-                else:
-                    st.markdown("##### Why these states differ:")
-                    has_termination_mismatch = False
-                    for explanation in explanations:
-                        if "Termination mismatch" in explanation:
-                            has_termination_mismatch = True
-                            st.markdown(f"- {explanation}")
-                            if D[idx1, idx2] == 1.0:
-                                st.markdown("  *(This alone contributes the full distance of 1.0)*")
-                        elif not has_termination_mismatch or D[idx1, idx2] < 1.0:
-                            st.markdown(f"- {explanation}")
-                    if not has_termination_mismatch or D[idx1, idx2] < 1.0:
-                        st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
+                compare_clicked = st.button("Compare", key=f"compare_{len(D)}")
+
+                if compare_clicked:
+                    if state1 != "Select a state..." and state2 != "Select a state...":
+                        idx1 = int(state1.split()[1]) - 1
+                        idx2 = int(state2.split()[1]) - 1
+                        
+                        explanations = analyze_state_differences(idx1, idx2, T, Term, D)
+                        
+                        st.markdown(f"#### Distance between {state1} and {state2}: {D[idx1, idx2]:.3f}")
+                        
+                        if idx1 == idx2:
+                            st.info(f"You're comparing {state1} with itself! The distance is always 0 because:")
+                            st.markdown("""
+                            - It's the same state
+                            - States always have identical behavior to themselves
+                            - This is called the reflexive property of bisimulation
+                            """)
+                        elif D[idx1, idx2] == 0:
+                            st.success(f"These states are bisimilar (identical behavior)! They have:")
+                            st.markdown("""
+                            - The same termination behavior
+                            - Identical transition probabilities to all states
+                            - No behavioral differences
+                            """)
+                        else:
+                            st.markdown("##### Why these states differ:")
+                            for line in explanations:
+                                st.markdown(f"- {line}")
+                            # footnote if more than 3 transitions exist
+                            total_diffs = sum(
+                                1 for j in range(len(T))
+                                if not np.isclose(T[idx1,j], T[idx2,j])
+                            )
+                            if total_diffs > 0 and D[idx1,idx2] < 1.0:
+                                st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
+                                                        # termination‐only note
+                            if explanations and explanations[0].startswith("Termination mismatch") and D[idx1,idx2] == 1.0:
+                                st.markdown("*Note: This alone contributes the full distance of 1.0*")
+                    else:
+                        st.info("Please select two states to compare.")
 
             st.markdown("#### 📊 Metrics Breakdown")
             # Add state analysis in expanders
@@ -485,7 +487,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                         explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D)
                         st.markdown("##### Why these states are similar:")
                         for explanation in explanations[:3]:  # Show only top 3
-                            st.markdown(f"- {explanation}")
+                            st.write(explanation)
                         st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
                     else:
                         st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f})")
@@ -510,7 +512,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                         explanations = analyze_state_differences(max_pairs[0][0], max_pairs[0][1], T, Term, D)
                         st.markdown("##### Why these states differ:")
                         for explanation in explanations[:3]:  # Show only top 3
-                            st.markdown(f"- {explanation}")
+                            st.write(explanation)
                         st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
                     else:
                         st.error(f"Found {len(max_pairs)} pairs of most different states (distance: {max_distance:.3f})")
@@ -588,7 +590,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                 - **0.0**: States are exactly bisimilar (identical behavior)
                 - **0.0 - 0.1**: States are very similar in behavior
                 - **0.1 - 0.3**: States show moderate similarity
-                - **0.3 - 0.5**: States show significant differences
+                - **0.3 - 0.5**: States show moderate difference
                 - **0.5 - 0.8**: States are quite different
                 - **0.8 - 1.0**: States are very different in behavior
                 
@@ -875,6 +877,58 @@ digraph G {{
             plt.tight_layout()
             
             st.pyplot(fig)
+
+            # Move Comparative Discrepancy Metrics to the end in an expander
+            with st.expander("Show Comparative Discrepancy Metrics", expanded=False):
+                st.markdown("#### ▶️ Comparative Discrepancy Metrics")
+                n = len(T)
+                # Compute all pairwise metrics (excluding diagonal)
+                eucl_dists = []
+                kl_dists = []
+                bisim_dists = []
+                for i in range(n):
+                    for j in range(i+1, n):
+                        # Euclidean distance between transition rows
+                        eucl = np.linalg.norm(T[i] - T[j])
+                        eucl_dists.append(eucl)
+                        # KL divergence (symmetrized, add small epsilon to avoid log(0))
+                        eps = 1e-12
+                        p, q = T[i] + eps, T[j] + eps
+                        kl1 = np.sum(p * np.log(p / q))
+                        kl2 = np.sum(q * np.log(q / p))
+                        kl = 0.5 * (kl1 + kl2)
+                        kl_dists.append(kl)
+                        # Bisimulation distance
+                        bisim_dists.append(D[i, j])
+                mean_eucl = np.mean(eucl_dists)
+                mean_kl = np.mean(kl_dists)
+                mean_bisim = np.mean(bisim_dists)
+                st.markdown("""
+| Metric                | Mean over all state-pairs |
+|-----------------------|--------------------------:|
+| Euclidean distance    | {:.3f}                   |
+| KL-Divergence         | {:.3f}                   |
+| Bisimulation distance | {:.3f}                   |
+""".format(mean_eucl, mean_kl, mean_bisim))
+                st.markdown("""
+These metrics capture different aspects of state similarity. Euclidean and KL-divergence measure direct differences in transition probabilities, while bisimulation distance accounts for structural equivalence. For example, some state pairs may have high Euclidean distance but zero bisimulation distance, indicating they are structurally equivalent despite differing transitions. Conversely, bisimulation distance highlights behavioral differences that other metrics may miss.
+""")
+                # Bar chart
+                st.markdown("##### Mean Metric Comparison")
+                fig, ax = plt.subplots(figsize=(5, 3))
+                metrics = ['Euclidean', 'KL-Div', 'Bisimulation']
+                means = [mean_eucl, mean_kl, mean_bisim]
+                sns.barplot(x=metrics, y=means, ax=ax, palette='pastel')
+                ax.set_ylabel('Mean Distance')
+                st.pyplot(fig)
+                # Scatter plot
+                st.markdown("##### Euclidean vs Bisimulation Distance (all pairs)")
+                df_metrics = pd.DataFrame({'Euclidean': eucl_dists, 'Bisimulation': bisim_dists})
+                fig2, ax2 = plt.subplots(figsize=(5, 4))
+                sns.regplot(x='Euclidean', y='Bisimulation', data=df_metrics, ax=ax2, scatter_kws={'s': 20}, line_kws={'color': 'red'})
+                ax2.set_xlabel('Euclidean Distance')
+                ax2.set_ylabel('Bisimulation Distance')
+                st.pyplot(fig2)
 
         with tab4:
             st.markdown("## 📚 Theoretical Foundations")

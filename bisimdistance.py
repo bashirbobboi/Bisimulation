@@ -1,5 +1,6 @@
 import numpy as np
 
+
 # --- File parsing and minimization helpers ---
 def input_probabilistic_transition_system(filename=None, use_file=True):
     """
@@ -165,16 +166,66 @@ def generate_graphviz_source(T, Term, labels, is_minimized=False):
                     dot.edge(f"{prefix} {i+1}", f"{prefix} {j+1}", label=f"{T[i, j]:.2f}")
     return dot.source
 
-def analyze_state_differences(idx1, idx2, T, Term, D):
+def wasserstein_distance(p, q, C):
+    n, m = len(p), len(q)
+    c = C.flatten()
+    A_eq = []
+    b_eq = []
+
+    for i in range(n):
+        row = np.zeros(n * m)
+        row[i * m:(i + 1) * m] = 1
+        A_eq.append(row)
+        b_eq.append(p[i])
+
+    for j in range(m):
+        col = np.zeros(n * m)
+        for i in range(n):
+            col[i * m + j] = 1
+        A_eq.append(col)
+        b_eq.append(q[j])
+
+    bounds = [(0, None)] * (n * m)
+    res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
+    if res.success:
+        coupling = res.x.reshape((n, m))
+        return res.fun, coupling
+    else:
+        raise ValueError("Wasserstein LP did not converge: " + res.message)
+
+def analyze_state_differences(idx1, idx2, T, Term, D_prev):
     explanations = []
+    # 1) Termination
     if Term[idx1] != Term[idx2]:
-        explanations.append(f"Termination mismatch: State {idx1+1} is {'terminating' if Term[idx1] else 'non-terminating'}, State {idx2+1} is {'terminating' if Term[idx2] else 'non-terminating'}.")
+        explanations.append(
+            f"Termination mismatch: State {idx1+1} is "
+            f"{'terminating' if Term[idx1] else 'non-terminating'}, "
+            f"while State {idx2+1} is "
+            f"{'terminating' if Term[idx2] else 'non-terminating'}."
+        )
+
+    # 2) If same termination status, do the LP coupling
     if Term[idx1] == Term[idx2]:
-        diffs = []
-        for j in range(len(T)):
-            if not np.isclose(T[idx1, j], T[idx2, j]):
-                diffs.append((j, T[idx1, j], T[idx2, j], abs(T[idx1, j] - T[idx2, j])))
-        diffs.sort(key=lambda x: -x[3])
-        for j, p1, p2, diff in diffs[:3]:
-            explanations.append(f"Transition difference: State {idx1+1} → State {j+1}: {p1:.2f} vs {p2:.2f} (Δ={diff:.2f})")
-    return explanations 
+        dist, coupling = wasserstein_distance(T[idx1], T[idx2], D_prev)
+        moves = []
+        n = len(T)
+        for i in range(n):
+            for j in range(n):
+                flow = coupling[i,j]
+                if flow > 1e-8 and D_prev[i,j] > 0:
+                    contrib = flow * D_prev[i,j]
+                    if contrib > 1e-3:   # filter out tiny ones
+                        moves.append((i, j, T[idx1,i], T[idx2,j], contrib))
+        # top 3
+        moves.sort(key=lambda x: x[4], reverse=True)
+        for i, j, p1, p2, contrib in moves[:3]:
+            explanations.append(
+                f"Transition from State {idx1+1} to State {i+1} "
+                f"(probability = {p1:.2f}) vs From State {idx2+1} to State {j+1} "
+                f"(probability = {p2:.2f}) → this contributes {contrib:.3f} to their distance"
+            )
+        # optional note if you truncated
+        if len(moves) > 3:
+            explanations.append("Note: Only the top 3 contributing transitions are shown here for clarity.")
+    return explanations
+
