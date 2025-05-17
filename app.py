@@ -358,10 +358,11 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
         min_time = end_min - start_min
 
         # Create tabs for different visualizations
-        tab1, tab2, tab3, tab4 = st.tabs([
+        tab1, tab2, tab3, tab4, tab5 = st.tabs([
             "📏 Distance Analysis", 
             "🔄 Minimization",
             "📈 System Analysis", 
+            "🎲 Simulation",
             "📚 Theory"
         ])
         
@@ -931,6 +932,160 @@ These metrics capture different aspects of state similarity. Euclidean and KL-di
                 st.pyplot(fig2)
 
         with tab4:
+            st.markdown("## 🎲 System Simulation")
+            
+            # Show original PTS visualization
+            st.markdown("### 📊 Original Probabilistic Transition System")
+            if not labels:
+                graphviz_src = f"""
+digraph G {{
+  rankdir=LR;
+  size="4,4";
+  node [shape=circle, style=filled, width=0.5, height=0.5];
+  {{
+    {chr(10).join([
+        f'"{i}" [label="State {i+1}", ' +
+        ("color=lightblue, peripheries=2" if Term[i] else "color=lightgreen") + "]" for i in range(len(T))
+    ])}
+  }}
+  {chr(10).join([
+      f'"{i}" -> "{j}" [label="{T[i,j]:.2f}", fontsize=8]' for i in range(len(T)) for j in range(len(T)) if T[i,j] > 0 and not Term[i]
+  ])}
+}}
+"""
+            else:
+                graphviz_src = generate_graphviz_source(T, Term, labels, is_minimized=False)
+            st.graphviz_chart(graphviz_src, use_container_width=False)
+            
+            st.markdown("---")
+            st.markdown("### 🎮 Simulation Controls")
+            
+            # Simulation controls
+            col1, col2 = st.columns(2)
+            with col1:
+                initial_state = st.selectbox(
+                    "Select Initial State",
+                    [f"State {i+1}" for i in range(len(T))],
+                    help="Choose the starting state for the simulation"
+                )
+                max_steps = st.number_input(
+                    "Maximum Steps",
+                    min_value=1,
+                    max_value=1000,
+                    value=100,
+                    help="Maximum number of steps before stopping the simulation"
+                )
+            
+            with col2:
+                num_simulations = st.number_input(
+                    "Number of Simulations",
+                    min_value=1,
+                    max_value=1000,
+                    value=100,
+                    help="Number of independent simulation runs to perform"
+                )
+                show_individual_runs = st.checkbox(
+                    "Show Individual Runs",
+                    value=False,
+                    help="Display the sequence of states for each simulation run"
+                )
+            
+            if st.button("Run Simulation"):
+                # Convert initial state to 0-based index
+                current_state = int(initial_state.split()[1]) - 1
+                
+                # Store results
+                all_runs = []
+                steps_to_termination = []
+                state_visits = np.zeros(len(T))
+                
+                # Run simulations
+                for sim in range(num_simulations):
+                    run = [current_state]
+                    steps = 0
+                    state = current_state
+                    
+                    while steps < max_steps:
+                        # Count state visit
+                        state_visits[state] += 1
+                        
+                        # Check if terminating state
+                        if Term[state]:
+                            break
+                        
+                        # Choose next state based on transition probabilities
+                        next_state = np.random.choice(len(T), p=T[state])
+                        run.append(next_state)
+                        state = next_state
+                        steps += 1
+                    
+                    all_runs.append(run)
+                    steps_to_termination.append(steps)
+                
+                # Display results
+                st.markdown("### 📊 Simulation Results")
+                
+                # Basic statistics
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric(
+                        "Average Steps to Termination",
+                        f"{np.mean(steps_to_termination):.1f}",
+                        help="Average number of steps before reaching a terminating state"
+                    )
+                with col2:
+                    st.metric(
+                        "Termination Rate",
+                        f"{np.mean([s < max_steps for s in steps_to_termination]):.1%}",
+                        help="Percentage of runs that reached a terminating state"
+                    )
+                with col3:
+                    st.metric(
+                        "Max Steps Reached",
+                        f"{max(steps_to_termination)}",
+                        help="Maximum number of steps taken in any run"
+                    )
+                
+                # Visualizations
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    # Histogram of steps to termination
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    sns.histplot(steps_to_termination, bins=20, ax=ax)
+                    ax.set_title('Distribution of Steps to Termination')
+                    ax.set_xlabel('Steps')
+                    ax.set_ylabel('Frequency')
+                    st.pyplot(fig)
+                
+                with col2:
+                    # State visit frequency
+                    fig, ax = plt.subplots(figsize=(6, 4))
+                    visit_freq = state_visits / num_simulations
+                    df_visits = pd.DataFrame({
+                        'State': [f"State {i+1}" for i in range(len(T))],
+                        'Visits': visit_freq
+                    })
+                    sns.barplot(data=df_visits, x='State', y='Visits', hue='State', legend=False, ax=ax)
+                    ax.set_title('State Visit Frequency')
+                    ax.set_xlabel('State')
+                    ax.set_ylabel('Average Visits per Run')
+                    plt.xticks(rotation=45)
+                    st.pyplot(fig)
+                
+                # Show individual runs if requested
+                if show_individual_runs:
+                    st.markdown("### 📝 Individual Run Sequences")
+                    for i, run in enumerate(all_runs):
+                        # Convert to 1-based indexing and add arrows
+                        run_str = " → ".join([f"S{s+1}" for s in run])
+                        if Term[run[-1]]:
+                            run_str += " (Terminated)"
+                        else:
+                            run_str += " (Max Steps)"
+                        st.text(f"Run {i+1}: {run_str}")
+
+        with tab5:
             st.markdown("## 📚 Theoretical Foundations")
             
             st.markdown("""
