@@ -304,15 +304,9 @@ elif input_mode == "Upload File":
 elif input_mode == "Manual Input":
     with st.sidebar:
         st.markdown("### 🛠️ Define Transition Matrix")
-        manual_format = st.selectbox(
-            "Model Format",
-            ["txt (legacy)", "prism", "json"],
-            help="Choose the format for manual input."
-        )
-        if manual_format == "txt (legacy)":
-            n = st.number_input("Number of states", min_value=2, max_value=15, step=1)
-            matrix = []
-            valid = True
+        n = st.number_input("Number of states", min_value=2, max_value=15, step=1)
+        matrix = []
+        valid = True
 
     # Create columns for matrix input
     cols = st.columns(min(n, 3))  # Show max 3 columns at a time
@@ -341,7 +335,15 @@ elif input_mode == "Manual Input":
 
     with st.sidebar:
         st.markdown("### 🎯 Terminating States")
-        Term = [st.selectbox(f"State {i+1}", [0, 1], key=f"term_{i}") for i in range(n)]
+        Term = [
+            1 if st.radio(
+                f"Is State {i+1} terminating?", 
+                options=["No", "Yes"], 
+                key=f"term_{i}", 
+                horizontal=True
+            ) == "Yes" else 0
+            for i in range(n)
+        ]
 
     # Only show label inputs and create button if matrix and Term are valid
     if valid:
@@ -429,21 +431,21 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                 """)
                 
                 state_options = ["Select a state..."] + [f"State {i+1}" for i in range(len(D))]
-                col1, col2 = st.columns(2)
-                with col1:
-                    state1 = st.selectbox("Select first state", state_options, key=f"state1_{len(D)}")
-                with col2:
-                    state2 = st.selectbox("Select second state", state_options, key=f"state2_{len(D)}")
-                
-                compare_clicked = st.button("Compare", key=f"compare_{len(D)}")
+
+                # Use a form to group the pickers and button
+                with st.form("state_compare_form"):
+                    col1, col2 = st.columns(2)
+                    with col1:
+                        state1 = st.selectbox("Select first state", state_options, key=f"state1_{len(D)}")
+                    with col2:
+                        state2 = st.selectbox("Select second state", state_options, key=f"state2_{len(D)}")
+                    compare_clicked = st.form_submit_button("Compare")
 
                 if compare_clicked:
                     if state1 != "Select a state..." and state2 != "Select a state...":
                         idx1 = int(state1.split()[1]) - 1
                         idx2 = int(state2.split()[1]) - 1
-                        
                         explanations = analyze_state_differences(idx1, idx2, T, Term, D)
-                        
                         st.markdown(f"#### Distance between {state1} and {state2}: {D[idx1, idx2]:.3f}")
                         
                         if idx1 == idx2:
