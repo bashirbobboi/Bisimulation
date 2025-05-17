@@ -256,5 +256,135 @@ def manual(to: str = typer.Option(..., help="Output file (internal JSON format)"
     save_internal_json(T, Term, labels, to)
     typer.echo(f"Manual PTS entry saved to {to}")
 
+@app.command()
+def simulate(
+    input_file: str,
+    start_state: int = typer.Option(..., help="Starting state (1-based)"),
+    num_simulations: int = typer.Option(100, help="Number of simulation runs"),
+    max_steps: int = typer.Option(100, help="Maximum steps per run"),
+    show_runs: bool = typer.Option(False, help="Show up to 10 individual run sequences")
+):
+    """
+    Simulate random runs from a starting state and report statistics.
+    """
+    T, Term, labels = load_internal_json(input_file)
+    n = len(T)
+    start_idx = start_state - 1
+    all_runs = []
+    steps_to_termination = []
+    termination_count = 0
+    max_steps_reached = 0
+
+    for sim in range(num_simulations):
+        run = [start_idx]
+        steps = 0
+        state = start_idx
+        while steps < max_steps:
+            if Term[state]:
+                break
+            next_state = np.random.choice(n, p=T[state])
+            run.append(next_state)
+            state = next_state
+            steps += 1
+        all_runs.append(run)
+        steps_to_termination.append(steps)
+        if Term[state]:
+            termination_count += 1
+        if steps > max_steps_reached:
+            max_steps_reached = steps
+
+    avg_steps = np.mean(steps_to_termination)
+    termination_rate = termination_count / num_simulations
+
+    typer.echo(f"\nSimulation Results (from State {start_state}):")
+    typer.echo(f"  Average Steps to Termination: {avg_steps:.2f}")
+    typer.echo(f"  Termination Rate: {termination_rate:.1%}")
+    typer.echo(f"  Max Steps Reached: {max_steps_reached}")
+
+    if show_runs:
+        typer.echo("\nSample Run Sequences (up to 10):")
+        for i, run in enumerate(all_runs[:10]):
+            run_str = ' → '.join(f"S{s+1}" for s in run)
+            final_state = run[-1]
+            if Term[final_state]:
+                run_str += " (Terminated)"
+            else:
+                run_str += " (Max Steps)"
+            typer.echo(f"Run {i+1}: {run_str}")
+
+@app.command()
+def compare_sim(
+    input_file: str,
+    state1: int = typer.Option(..., help="First starting state (1-based)"),
+    state2: int = typer.Option(..., help="Second starting state (1-based)"),
+    num_runs: int = typer.Option(20, help="Number of comparative runs"),
+    show_runs: bool = typer.Option(False, help="Show up to 5 run sequences for each state")
+):
+    """
+    Compare simulation statistics and sample runs from two different starting states.
+    """
+    T, Term, labels = load_internal_json(input_file)
+    n = len(T)
+    idx1 = state1 - 1
+    idx2 = state2 - 1
+
+    def simulate_runs(start_idx):
+        all_runs = []
+        steps_to_termination = []
+        termination_count = 0
+        max_steps_reached = 0
+        for _ in range(num_runs):
+            run = [start_idx]
+            steps = 0
+            state = start_idx
+            while steps < 100:  # Default max steps per run
+                if Term[state]:
+                    break
+                next_state = np.random.choice(n, p=T[state])
+                run.append(next_state)
+                state = next_state
+                steps += 1
+            all_runs.append(run)
+            steps_to_termination.append(steps)
+            if Term[state]:
+                termination_count += 1
+            if steps > max_steps_reached:
+                max_steps_reached = steps
+        avg_steps = np.mean(steps_to_termination)
+        termination_rate = termination_count / num_runs
+        return avg_steps, termination_rate, max_steps_reached, all_runs
+
+    avg1, rate1, max1, runs1 = simulate_runs(idx1)
+    avg2, rate2, max2, runs2 = simulate_runs(idx2)
+
+    typer.echo(f"\nComparative Simulation Results:")
+    typer.echo(f"  State {state1}:")
+    typer.echo(f"    Average Steps to Termination: {avg1:.2f}")
+    typer.echo(f"    Termination Rate: {rate1:.1%}")
+    typer.echo(f"    Max Steps Reached: {max1}")
+    typer.echo(f"  State {state2}:")
+    typer.echo(f"    Average Steps to Termination: {avg2:.2f}")
+    typer.echo(f"    Termination Rate: {rate2:.1%}")
+    typer.echo(f"    Max Steps Reached: {max2}")
+
+    if show_runs:
+        typer.echo(f"\nSample Run Sequences (up to 5 each):")
+        for i, run in enumerate(runs1[:5]):
+            run_str = ' → '.join(f"S{s+1}" for s in run)
+            final_state = run[-1]
+            if Term[final_state]:
+                run_str += " (Terminated)"
+            else:
+                run_str += " (Max Steps)"
+            typer.echo(f"State {state1} Run {i+1}: {run_str}")
+        for i, run in enumerate(runs2[:5]):
+            run_str = ' → '.join(f"S{s+1}" for s in run)
+            final_state = run[-1]
+            if Term[final_state]:
+                run_str += " (Terminated)"
+            else:
+                run_str += " (Max Steps)"
+            typer.echo(f"State {state2} Run {i+1}: {run_str}")
+
 if __name__ == "__main__":
     app()
