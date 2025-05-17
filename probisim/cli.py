@@ -14,7 +14,8 @@ from probisim.bisimdistance import (
     compute_equivalence_classes,
     compute_minimized_transition_matrix,
     generate_graphviz_source,
-    input_probabilistic_transition_system
+    input_probabilistic_transition_system,
+    analyze_state_differences
 )
 
 app = typer.Typer()
@@ -83,14 +84,16 @@ def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", hel
     typer.echo(str(minimized_T))
     # Save minimized PTS visualization
     minimized_dot = generate_graphviz_source(minimized_T, list(class_termination_status.values()), minimized_labels, is_minimized=True)
-    with open("minimized_PTS.dot", "w") as f:
-        f.write(minimized_dot)
-    typer.echo("Minimized PTS Graphviz source saved to minimized_PTS.dot")
+    minimized_src = Source(minimized_dot)
+    minimized_src.format = "png"
+    minimized_src.render("minimized_PTS", cleanup=True)
+    typer.echo("Minimized PTS image saved to minimized_PTS.png")
     # Save original PTS visualization
     orig_dot = generate_graphviz_source(T, Term, labels, is_minimized=False)
-    with open("original_PTS.dot", "w") as f:
-        f.write(orig_dot)
-    typer.echo("Original PTS Graphviz source saved to original_PTS.dot")
+    orig_src = Source(orig_dot)
+    orig_src.format = "png"
+    orig_src.render("original_PTS", cleanup=True)
+    typer.echo("Original PTS image saved to original_PTS.png")
 
 @app.command()
 def dist(input_file: str):
@@ -130,6 +133,128 @@ def dist(input_file: str):
     typer.echo(f"  Maximum Distance: {max_dist:.3f}")
     typer.echo(f"  Median Distance: {median_dist:.3f}")
     typer.echo(f"  Zero Distance Pairs: {zero_pairs} ({zero_prop:.1%})")
+    # Find most similar and most different state pairs
+    D_copy = D.copy()
+    np.fill_diagonal(D_copy, np.inf)  # Exclude self-comparisons for min
+    min_distance = np.min(D_copy)
+    max_distance = np.max(D)
+
+    min_pairs = np.where(np.abs(D_copy - min_distance) < 1e-10)
+    max_pairs = np.where(np.abs(D - max_distance) < 1e-10)
+
+    min_pairs = list(zip(min_pairs[0], min_pairs[1]))
+    max_pairs = list(zip(max_pairs[0], max_pairs[1]))
+
+    # Filter out duplicate pairs (e.g., (1,2) and (2,1))
+    min_pairs = [(s1, s2) for s1, s2 in min_pairs if s1 < s2]
+    max_pairs = [(s1, s2) for s1, s2 in max_pairs if s1 < s2]
+
+    typer.echo(f"\nMost Similar State Pairs (distance={min_distance:.3f}):")
+    for s1, s2 in min_pairs:
+        typer.echo(f"  S{s1+1} and S{s2+1}")
+
+    typer.echo(f"\nMost Different State Pairs (distance={max_distance:.3f}):")
+    for s1, s2 in max_pairs:
+        typer.echo(f"  S{s1+1} and S{s2+1}")
+
+@app.command()
+def explain(input_file: str, state1: int = typer.Argument(...), state2: int = typer.Argument(...)):
+    """
+    Explain why two states are similar or different.
+    """
+    T, Term, labels = load_internal_json(input_file)
+    D = bisimulation_distance_matrix(T, Term)
+    idx1, idx2 = state1 - 1, state2 - 1
+    explanations = analyze_state_differences(idx1, idx2, T, Term, D)
+    typer.echo(f"Distance between S{state1} and S{state2}: {D[idx1, idx2]:.3f}")
+    for line in explanations:
+        typer.echo(f"- {line}")
+
+@app.command()
+def classof(input_file: str, state: int = typer.Argument(...)):
+    """
+    Show the equivalence class for a given state.
+    """
+    T, Term, labels = load_internal_json(input_file)
+    n = len(T)
+    R_0 = {(x, y) for x in range(n) for y in range(n)}
+    R_n = refine_relation(R_0, T, Term)
+    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, n, Term)
+    class_id = state_class_map[state - 1]
+    class_states = sorted([s+1 for s in equivalence_classes[class_id]])
+    term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
+    typer.echo(f"State S{state} is in equivalence class {class_id+1}: {class_states} ({term})")
+
+@app.command()
+def classes(input_file: str):
+    """
+    List all equivalence classes and their members.
+    """
+    T, Term, labels = load_internal_json(input_file)
+    n = len(T)
+    R_0 = {(x, y) for x in range(n) for y in range(n)}
+    R_n = refine_relation(R_0, T, Term)
+    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, n, Term)
+    typer.echo("Equivalence Classes:")
+    for class_id, class_states in equivalence_classes.items():
+        class_states_sorted = sorted([s+1 for s in class_states])
+        term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
+        typer.echo(f"  Class {class_id+1}: {class_states_sorted} ({term})")
+
+@app.command()
+def manual(to: str = typer.Option(..., help="Output file (internal JSON format)")):
+    """
+    Enter a PTS interactively from the command line and save as internal JSON.
+    """
+    typer.echo("Manual Probabilistic Transition System Entry")
+    n = typer.prompt("How many states?", type=int)
+    T = np.zeros((n, n))
+    Term = np.zeros(n, dtype=int)
+    labels = {}
+
+    # Terminating states
+    for i in range(n):
+        term = typer.prompt(f"Is state {i+1} terminating? (y/n)", type=str).strip().lower()
+        while term not in ("y", "n"):
+            term = typer.prompt(f"Please enter 'y' or 'n' for state {i+1}:", type=str).strip().lower()
+        Term[i] = 1 if term == "y" else 0
+
+    # Transitions and labels
+    for i in range(n):
+        if Term[i]:
+            typer.echo(f"State {i+1} is terminating. No outgoing transitions.")
+            continue
+        # Ask for outgoing transitions
+        out_str = typer.prompt(
+            f"Enter destination states and probabilities for state {i+1} (e.g. '2 0.5, 3 0.5' for 0.5 to state 2 and 0.5 to state 3), or leave blank for no transitions:"
+        ).strip()
+        if out_str:
+            try:
+                pairs = [p.strip() for p in out_str.split(',') if p.strip()]
+                total_prob = 0.0
+                for pair in pairs:
+                    dest, prob = pair.split()
+                    dest = int(dest) - 1
+                    prob = float(prob)
+                    if dest < 0 or dest >= n:
+                        typer.echo(f"  Invalid destination state: {dest+1}")
+                        return
+                    T[i, dest] = prob
+                    total_prob += prob
+                    # Optional: ask for label
+                    label = typer.prompt(f"Label for transition S{i+1}→S{dest+1} (or leave blank)", default="").strip()
+                    if label:
+                        labels[(i, dest)] = label
+                if not np.isclose(total_prob, 1.0):
+                    typer.echo(f"Warning: Probabilities from state {i+1} sum to {total_prob}, not 1.0!")
+            except Exception as e:
+                typer.echo(f"Error parsing transitions for state {i+1}: {e}")
+                return
+        else:
+            typer.echo(f"State {i+1} will have no outgoing transitions.")
+
+    save_internal_json(T, Term, labels, to)
+    typer.echo(f"Manual PTS entry saved to {to}")
 
 if __name__ == "__main__":
     app()
