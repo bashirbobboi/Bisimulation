@@ -300,75 +300,57 @@ elif input_mode == "Upload File":
         """)
 
 elif input_mode == "Manual Input":
-    with st.sidebar:
-        st.markdown("### 🛠️ Define Transition Matrix")
-        n = st.number_input("Number of states", min_value=2, max_value=15, step=1)
-        matrix = []
-        valid = True
-
-    # Create columns for matrix input
-    cols = st.columns(min(n, 3))  # Show max 3 columns at a time
+    # --- collect raw inputs ---
+    n = st.sidebar.number_input("Number of states", 2, 15, 2)
+    matrix = []
+    valid = True
     for i in range(n):
-        col_idx = i % len(cols)
-        with cols[col_idx]:
-            if n > 1:
-                base = round(1.0/n, 2)
-                first = round(1.0 - (n-1)*base, 2)
-                placeholder = "e.g. " + " ".join([f"{first:.2f}"] + [f"{base:.2f}"]*(n-1))
-            else:
-                placeholder = "e.g. 1.00"
-            row_input = st.text_input(
-                f"State {i+1} transitions",
-                key=f"row_{i}",
-                placeholder=placeholder
-            )
-            try:
-                row_vals = list(map(float, row_input.strip().split()))
-                if len(row_vals) != n or not np.isclose(sum(row_vals), 1.0):
-                    raise ValueError()
-                matrix.append(row_vals)
-            except:
-                st.error(f"Row {i+1} must have {n} numbers summing to 1.")
-                valid = False
+        row = st.sidebar.text_input(f"State {i+1} transitions", key=f"row_{i}")
+        # parse & validate...
+        try:
+            vals = list(map(float, row.split()))
+            assert len(vals)==n and np.isclose(sum(vals),1.0)
+            matrix.append(vals)
+        except:
+            st.sidebar.error(f"Row {i+1} needs {n} numbers summing to 1.")
+            valid = False
 
-    with st.sidebar:
-        st.markdown("### 🎯 Terminating States")
-        Term = [
-            1 if st.radio(
-                f"Is State {i+1} terminating?", 
-                options=["No", "Yes"], 
-                key=f"term_{i}", 
-                horizontal=True
-            ) == "Yes" else 0
-            for i in range(n)
-        ]
+    Term = [
+      1 if st.sidebar.radio(f"State {i+1} terminating?", ["No","Yes"], key=f"term_{i}")=="Yes" else 0
+      for i in range(n)
+    ]
 
-    # Only show label inputs and create button if matrix and Term are valid
+    # --- only show this when your matrix+Term are valid ---
     if valid:
-        T = None
-        labels = {}
-        st.markdown("### 🏷️ Transition Labels (Optional)")
-        label_cols = st.columns(min(n, 3))
-        for i in range(n):
-            for j in range(n):
-                if matrix[i][j] > 0:
-                    col_idx = (i * n + j) % len(label_cols)
-                    with label_cols[col_idx]:
-                        label = st.text_input(f"S{i+1} → S{j+1}", key=f"label_{i}_{j}")
-                        if label:
-                            labels[(i, j)] = label
-        st.warning("⚠️ You may optionally fill in transition labels. Leave blank for unlabeled transitions.")
-        # Add Create System button
-        if st.button("Create System"):
-            T = np.array(matrix)
-            Term = np.array(Term)
-            st.success("✅ Manual input accepted. System created.")
-            all_labels_filled = True
-        else:
-            T = None
-            Term = None
-            labels = None
-            all_labels_filled = False
+        # wrap create in its own form
+        with st.form("manual_create_form"):
+            st.markdown("🏷️ Optional Labels")
+            labels = {}
+            for i in range(n):
+                for j in range(n):
+                    if matrix[i][j]>0:
+                        lab = st.text_input(f"S{i+1}→S{j+1}", key=f"lab_{i}_{j}")
+                        if lab: labels[(i,j)] = lab
+
+            create = st.form_submit_button("Create System")
+            if create:
+                # persist into session_state
+                st.session_state["T_manual"]     = np.array(matrix)
+                st.session_state["Term_manual"]  = np.array(Term)
+                st.session_state["labels_manual"]= labels
+                st.success("✅ System created!")
+
+    # --- read back from session_state ---
+    if "T_manual" in st.session_state:
+        T      = st.session_state["T_manual"]
+        Term   = st.session_state["Term_manual"]
+        labels = st.session_state["labels_manual"]
+        all_labels_filled = True
+    else:
+        T = Term = labels = None
+        all_labels_filled = False
+
+
 
 # ---- Main Calculation ---- #
 if T is not None and Term is not None and (input_mode == "Upload File" or input_mode == "Manual Input" or (input_mode == "Benchmark Datasets" and all_labels_filled)):
