@@ -4,18 +4,17 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import os
 from pathlib import Path
-from commandline import (
+from bisimdistance import (
+    input_probabilistic_transition_system,
     refine_relation,
     compute_equivalence_classes,
     compute_minimized_transition_matrix,
-    input_probabilistic_transition_system
-)
-from demo import (
     bisimulation_distance_matrix,
     generate_graphviz_source,
     analyze_state_differences
 )
 import pandas as pd
+import time
 
 # Create necessary directories if they don't exist
 Path("txt").mkdir(exist_ok=True)
@@ -177,7 +176,7 @@ if input_mode == "Benchmark Datasets":
         st.sidebar.markdown("#### Generate Random System")
         num_states = st.sidebar.number_input(
             "Number of States",
-            min_value=3,
+            min_value=2,
             max_value=10,
             value=4,
             help="Choose how many states your random system should have"
@@ -280,14 +279,14 @@ elif input_mode == "Upload File":
 elif input_mode == "Manual Input":
     with st.sidebar:
         st.markdown("### 🛠️ Define Transition Matrix")
-        n = st.number_input("Number of states", min_value=3, max_value=10, step=1)
+        n = st.number_input("Number of states", min_value=2, max_value=15, step=1)
         matrix = []
         valid = True
 
     # Create columns for matrix input
     cols = st.columns(min(n, 3))  # Show max 3 columns at a time
     for i in range(n):
-        col_idx = i % 3
+        col_idx = i % len(cols)
         with cols[col_idx]:
             if n > 1:
                 base = round(1.0/n, 2)
@@ -322,7 +321,7 @@ elif input_mode == "Manual Input":
         for i in range(n):
             for j in range(n):
                 if matrix[i][j] > 0:
-                    col_idx = (i * n + j) % 3
+                    col_idx = (i * n + j) % len(label_cols)
                     with label_cols[col_idx]:
                         label = st.text_input(f"S{i+1} → S{j+1}", key=f"label_{i}_{j}")
                         if label:
@@ -343,7 +342,20 @@ elif input_mode == "Manual Input":
 # ---- Main Calculation ---- #
 if T is not None and Term is not None and (input_mode == "Upload File" or input_mode == "Manual Input" or (input_mode == "Benchmark Datasets" and all_labels_filled)):
     try:
+        # --- Distance computation timing ---
+        start_dist = time.time()
         D = bisimulation_distance_matrix(T, Term)
+        end_dist = time.time()
+        dist_time = end_dist - start_dist
+
+        # --- Minimization timing ---
+        start_min = time.time()
+        R_0 = {(x, y) for x in range(len(T)) for y in range(len(T))}
+        R_n = refine_relation(R_0, T, Term)
+        equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, len(T), Term)
+        minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
+        end_min = time.time()
+        min_time = end_min - start_min
 
         # Create tabs for different visualizations
         tab1, tab2, tab3, tab4 = st.tabs([
@@ -355,6 +367,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
         
         with tab1:
             st.markdown("### Distance Analysis")
+            st.info(f"Distance computation time: {dist_time:.2f} seconds")
             
             st.markdown("#### Distance Matrix")
             with st.expander("Show Distance Table", expanded=True):
@@ -617,32 +630,28 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
 
         with tab2:
             st.markdown("### 🧠 Probabilistic Transition System Comparison")
+            st.info(f"Bisimulation minimization time: {min_time:.2f} seconds")
             
-            R_0 = {(x, y) for x in range(len(T)) for y in range(len(T))}
-            R_n = refine_relation(R_0, T, Term)
-            equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, len(T), Term)
-            minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
-
             col1, col2 = st.columns(2)
             
             with col1:
                 st.markdown("#### 🎨 Original PTS")
                 if not labels:
                     graphviz_src = f"""
-                    digraph G {{
-                        rankdir=LR;
-                        node [shape=circle, style=filled];
-                        {{
-                            node [color=lightgreen];
-                            {chr(10).join(f'"{i}" [label="{i}"];' for i in range(len(T)) if not Term[i])}
-                        }}
-                        {{
-                            node [color=lightblue, peripheries=2];
-                            {chr(10).join(f'"{i}" [label="{i}"];' for i in range(len(T)) if Term[i])}
-                        }}
-                        {chr(10).join(f'"{i}" -> "{j}" [label="{T[i,j]:.2f}"];' for i in range(len(T)) for j in range(len(T)) if T[i,j] > 0 and not Term[i])}
-                    }}
-                    """
+digraph G {{
+  rankdir=LR;
+  node [shape=circle, style=filled];
+  {{
+    {chr(10).join([
+        f'"{i}" [label="State {i+1}", ' +
+        ("color=lightblue, peripheries=2" if Term[i] else "color=lightgreen") + "]" for i in range(len(T))
+    ])}
+  }}
+  {chr(10).join([
+      f'"{i}" -> "{j}" [label="{T[i,j]:.2f}"]' for i in range(len(T)) for j in range(len(T)) if T[i,j] > 0 and not Term[i]
+  ])}
+}}
+"""
                 else:
                     graphviz_src = generate_graphviz_source(T, Term, labels, is_minimized=False)
                 st.graphviz_chart(graphviz_src)
@@ -651,20 +660,20 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                 st.markdown("#### 🎨 Minimized PTS")
                 if not minimized_labels:
                     minimized_graphviz_src = f"""
-                    digraph G {{
-                        rankdir=LR;
-                        node [shape=circle, style=filled];
-                        {{
-                            node [color=lightgreen];
-                            {chr(10).join(f'"{i}" [label="Class {i}"];' for i in range(len(minimized_T)) if not list(class_termination_status.values())[i])}
-                        }}
-                        {{
-                            node [color=lightblue, peripheries=2];
-                            {chr(10).join(f'"{i}" [label="Class {i}"];' for i in range(len(minimized_T)) if list(class_termination_status.values())[i])}
-                        }}
-                        {chr(10).join(f'"{i}" -> "{j}" [label="{minimized_T[i,j]:.2f}"];' for i in range(len(minimized_T)) for j in range(len(minimized_T)) if minimized_T[i,j] > 0 and not list(class_termination_status.values())[i])}
-                    }}
-                    """
+digraph G {{
+  rankdir=LR;
+  node [shape=circle, style=filled];
+  {{
+    {chr(10).join([
+        f'"{i}" [label="Class {i+1}", ' +
+        ("color=lightblue, peripheries=2" if list(class_termination_status.values())[i] else "color=lightgreen") + "]" for i in range(len(minimized_T))
+    ])}
+  }}
+  {chr(10).join([
+      f'"{i}" -> "{j}" [label="{minimized_T[i,j]:.2f}"]' for i in range(len(minimized_T)) for j in range(len(minimized_T)) if minimized_T[i,j] > 0 and not list(class_termination_status.values())[i]
+  ])}
+}}
+"""
                 else:
                     minimized_graphviz_src = generate_graphviz_source(
                         minimized_T, 
