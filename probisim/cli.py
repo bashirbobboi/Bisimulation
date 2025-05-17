@@ -61,7 +61,11 @@ def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", hel
     # Minimization
     R_0 = {(x, y) for x in range(n) for y in range(n)}
     R_n = refine_relation(R_0, T, Term)
-    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, n, Term)
+    # Convert relation set to matrix
+    R_mat = np.zeros((n, n), dtype=int)
+    for x, y in R_n:
+        R_mat[x, y] = 1
+    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
     minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
     # Print statistics
     num_classes = len(equivalence_classes)
@@ -179,7 +183,11 @@ def classof(input_file: str, state: int = typer.Argument(...)):
     n = len(T)
     R_0 = {(x, y) for x in range(n) for y in range(n)}
     R_n = refine_relation(R_0, T, Term)
-    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, n, Term)
+    # Convert relation set to matrix
+    R_mat = np.zeros((n, n), dtype=int)
+    for x, y in R_n:
+        R_mat[x, y] = 1
+    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
     class_id = state_class_map[state - 1]
     class_states = sorted([s+1 for s in equivalence_classes[class_id]])
     term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
@@ -194,7 +202,11 @@ def classes(input_file: str):
     n = len(T)
     R_0 = {(x, y) for x in range(n) for y in range(n)}
     R_n = refine_relation(R_0, T, Term)
-    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_n, n, Term)
+    # Convert relation set to matrix
+    R_mat = np.zeros((n, n), dtype=int)
+    for x, y in R_n:
+        R_mat[x, y] = 1
+    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
     typer.echo("Equivalence Classes:")
     for class_id, class_states in equivalence_classes.items():
         class_states_sorted = sorted([s+1 for s in class_states])
