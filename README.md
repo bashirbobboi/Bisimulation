@@ -71,28 +71,85 @@ The web interface provides:
 - State difference explanations
 - System metrics and statistics
 
-### Command Line Interface
+---
 
-The tool provides a comprehensive CLI for batch processing and automation:
+## 🛠️ Command-Line Interface
 
-```bash
-# Compute bisimulation distances
-probisim distance input.pts --output distances.csv
+All commands are exposed via the `cli.py` script. Use the `--help` flag to explore options for each command.
 
-# Find equivalence classes
-probisim equivalence input.pts --output classes.txt
+### Model Parsing and Entry
 
-# Minimize PTS
-probisim minimize input.pts --output minimized.pts
+- **Parse a model (to internal JSON):**
+  ```bash
+  python cli.py parse path/to/model.pm prism --to internal.json
+  ```
+  <sub>Supported formats: `prism`, `json`, `txt`</sub>
 
-# Compare systems
-probisim compare system1.pts system2.pts --metric bisimulation
-```
+- **Manual entry of a PTS:**
+  ```bash
+  python cli.py manual --to internal.json
+  ```
+  <sub>Enter a PTS interactively from the command line.</sub>
 
-For full CLI documentation:
-```bash
-probisim --help
-```
+---
+
+### Bisimulation and Analysis
+
+- **Run bisimulation minimization and show statistics:**
+  ```bash
+  python cli.py bisim internal.json
+  ```
+
+- **Compute distance matrix and metrics:**
+  ```bash
+  python cli.py dist internal.json
+  ```
+
+- **Explain state differences:**
+  ```bash
+  python cli.py explain internal.json 1 2
+  ```
+  <sub>Explains why state 1 and state 2 are (not) bisimilar.</sub>
+
+- **Get equivalence class of a state:**
+  ```bash
+  python cli.py classof internal.json 3
+  ```
+
+- **List all equivalence classes:**
+  ```bash
+  python cli.py classes internal.json
+  ```
+
+---
+
+### Simulation
+
+- **Simulate random runs from a starting state:**
+  ```bash
+  python cli.py simulate internal.json --start-state 1 --num-simulations 100 --max-steps 100 --show-runs
+  ```
+  <sub>Simulates random runs and reports statistics. `--show-runs` is optional.</sub>
+
+- **Comparative simulation from two starting states:**
+  ```bash
+  python cli.py compare-sim internal.json --state1 1 --state2 2 --num-runs 20 --max-steps 100 --show-runs
+  ```
+  <sub>Compares simulation statistics and sample runs from two different starting states.</sub>
+
+---
+
+### General Help
+
+- **Show help for any command:**
+  ```bash
+  python cli.py --help
+  python cli.py <command> --help
+  ```
+
+---
+
+**Tip:** All commands support `--help` for detailed usage and options.
 
 ## Theoretical Background
 
@@ -129,13 +186,6 @@ The tool implements a metric for quantifying behavioral similarity between state
   - Property-based testing using Hypothesis
   - Unit tests for all core components
   - Integration tests for CLI and web interface
-
-## Contributing
-
-This is a dissertation project, but suggestions and improvements are welcome.
-- Report issues
-- Suggest improvements
-- Submit pull requests
 
 
 ## Author
