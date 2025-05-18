@@ -1,113 +1,45 @@
+# Bisimulation
+This is for my probabilistic bisimulation dissertation project
+
+# Algorithm for Computing Distance
 Input:
-  - Transition matrix T of size [n x n]
-  - Terminating vector Term of size [n]
-  - Ground distance function d(i, j) for states i and j (e.g., d(i, j) = 0 if i == j, else 1)
+    - Transition matrix T representing the Markov chain. i.e Where T[x][·] gives the distribution over next states from x
+    - Set of states X (state space)
+    - Termination vector Term[x] ∈ {0, 1}, where x = 1 if its a terminating state, else 0 
+    - Ground distance function d₀(x, y) (e.g., 0 if x = y, 1 otherwise)
 
 Output:
-  - Distance matrix D of size [n x n] where D[i][j] = distance between state i and j
+    - Distance matrix D of size n × n
+      where D[x][y] ∈ [0, 1] represents the behavioral distance between state x and state y.
+      A value of:
+        - 0 means x and y are behaviorally identical (bisimilar),
+        - 1 means x and y are maximally different
+        - Values between 0 and 1 reflect partial similarity.
 
 Algorithm:
 
-1. Initialize distance matrix D[i][j] = 0 for all i, j
+1. Initialize:
+    - For all states x, y in X:
+       - D₀[x][y] ← d₀(x, y)      # Initial distance 
+       - If Term[x] ≠ Term[y]:
+            D₀[x][y] ← 1     # Hard max distance for termination mismatch
+        Else:
+            D₀[x][y] ← d₀(x, y)
+    - Set n ← 0
 
-2. For each pair of states (s1, s2) in 0...n-1:
-   a. If Term[s1] != Term[s2]:
-        D[s1][s2] = 1   # Different termination status means max dissimilarity
-        continue
+2. Define update rule for behavioral distance:
+    - For every pair of states x, y ∈ X:
+        D_{n+1}[x][y] ← Wasserstein_Distance(T[x], T[y], ground_cost = Dₙ)
+        # i.e., solve LP to find minimal cost of coupling between T[x] and T[y]
+        # where the cost of moving from state i to state j is Dₙ[i][j]
 
-   b. Let P1 = T[s1]         # Row vector: transition probabilities from state s1
-      Let P2 = T[s2]         # Row vector: transition probabilities from state s2
+3. Iterate to convergence:
+    - repeat:
+        a. For all x, y ∈ X:
+              Compute D_{n+1}[x][y] using step 2
+        b. If D_{n+1} == Dₙ:
+              break
+        c. Else:
+              n ← n + 1
 
-   c. Solve the following linear program to compute the Kantorovich distance:
-
-      Variables:
-        μ[i][j] for i = 0..n-1, j = 0..n-1 (transport plan)
-
-      Objective:
-        Minimize sum over i, j: μ[i][j] * d(i, j)
-
-      Subject to:
-        For each i: sum over j: μ[i][j] = P1[i]
-        For each j: sum over i: μ[i][j] = P2[j]
-        μ[i][j] ≥ 0 for all i, j
-
-   d. Let cost = solution of the LP
-      Set D[s1][s2] = cost
-
-3. Return the distance matrix D
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-Input:
-  - Transition matrix T[n][n] (probabilities from state x to y)
-  - Terminating vector Term[n] (1 if terminating, 0 otherwise)
-  - Ground distance function d(i, j) (i.e., 0 if i == j, else 1)
-
-Output:
-  - Distance matrix D[n][n] where D[x][y] ∈ [0, 1], representing how dissimilar x and y are
-
-Algorithm:
-
-1. Initialize distance matrix D:
-   For all x, y in X:
-     If Term[x] ≠ Term[y]:
-        D[x][y] ← 1    # Max dissimilarity if termination status differs
-     Else:
-        D[x][y] ← 0    # Start assuming all others are similar
-
-2. Repeat until convergence (e.g., changes in D are < ε for all entries):
-   a. For each pair (x, y) where Term[x] = Term[y]:
-
-      i. Let P = T[x][:]  ← transition distribution from x
-         Let Q = T[y][:]  ← transition distribution from y
-
-      ii. Define Kantorovich LP:
-          - Variables: μ[i][j] ≥ 0 (transport plan)
-          - Constraints:
-              ∑_j μ[i][j] = P[i]   for all i
-              ∑_i μ[i][j] = Q[j]   for all j
-          - Objective:
-              Minimize ∑_i ∑_j μ[i][j] * D[i][j]
-
-      iii. Solve LP to get updated distance value: cost
-           Set new_D[x][y] ← cost
-
-   b. Check for convergence:
-      If max |new_D[x][y] - D[x][y]| < ε for all x, y:
-         break
-
-   c. Update D ← new_D
-
-3. Return final distance matrix D
+4. Return D = Dₙ as the final bisimulation distance matrix
