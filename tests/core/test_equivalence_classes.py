@@ -1,9 +1,13 @@
+"""
+Unit tests for equivalence class computation from relation matrices.
+Covers single/disjoint/partial classes, error handling, and class properties.
+"""
 import pytest
 import numpy as np
 from probisim.bisimdistance import compute_equivalence_classes
 
 def classes_to_sorted_list(classes_dict):
-    # Convert dict of sets to list of sets, sorted by smallest element in each set
+    """Convert dict of sets to list of sets, sorted by smallest element in each set."""
     return [set(classes_dict[k]) for k in sorted(classes_dict, key=lambda x: min(classes_dict[x]) if classes_dict[x] else -1)]
 
 def test_single_class():
@@ -17,6 +21,7 @@ def test_single_class():
     assert set(classes[0]) == {0, 1, 2}
 
 def test_invalid_shape_raises_value_error():
+    """Test that an invalid relation shape raises a ValueError."""
     # Make a 2×2 matrix but tell it there are 3 states → should raise the shape error
     R = np.ones((2, 2), dtype=int)
     Term = np.zeros(3, dtype=int)
@@ -25,6 +30,7 @@ def test_invalid_shape_raises_value_error():
     assert "Relation matrix must be shape (3,3)" in str(exc.value)
 
 def test_invalid_entries_raises_value_error():
+    """Test that non-binary entries in the relation raise a ValueError."""
     # A 2×2 but with a 2 in it, should trip the binary‐entry check
     R = np.array([[1,2],[0,1]], dtype=int)
     Term = np.zeros(2, dtype=int)
@@ -57,7 +63,7 @@ def test_partial_classes():
     assert set(classes[1]) == {2}
 
 def test_empty_relation():
-    """Test with an empty relation."""
+    """Test with an empty relation (no states)."""
     relation = np.array([])
     num_states = 0
     Term = np.zeros(num_states, dtype=int)
@@ -76,7 +82,7 @@ def test_single_state():
     assert set(classes[0]) == {0}
 
 def test_invalid_inputs():
-    """Test that invalid inputs raise appropriate errors."""
+    """Test that invalid inputs raise appropriate errors (non-symmetric, non-reflexive, invalid values)."""
     num_states = 2
     Term = np.zeros(num_states, dtype=int)
     # Non-symmetric relation
@@ -90,7 +96,7 @@ def test_invalid_inputs():
         compute_equivalence_classes(np.array([[1, 2], [2, 1]]), num_states, Term)
 
 def test_class_properties():
-    """Test that computed classes have the expected properties."""
+    """Test that computed classes have the expected properties (disjoint, cover all states, etc)."""
     relation = np.array([
         [1, 1, 0, 0],
         [1, 1, 0, 0],

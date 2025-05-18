@@ -1,7 +1,12 @@
+"""
+Unit tests for input_probabilistic_transition_system (legacy TXT parser).
+Covers valid parsing, error handling for row length, row sum, and file fallback.
+"""
 import numpy as np
 import pytest
 
 def write_file(tmp_path, content):
+    """Helper to write content to a file in tmp_path and return its path."""
     file_path = tmp_path / "model.txt"
     file_path.write_text(content)
     return str(file_path)
@@ -12,6 +17,7 @@ from textwrap import dedent
 # === Tests for input_probabilistic_transition_system ===
 
 def test_input_system_valid(tmp_path):
+    """Test parsing a valid 3-state system with labels and comments."""
     # Create a valid 3-state system with labels and comments
     content = dedent("""
 # Example PTS
@@ -49,6 +55,7 @@ def test_input_system_valid(tmp_path):
 
 
 def test_input_system_missing_values(tmp_path):
+    """Test that a row with the wrong number of entries raises a ValueError."""
     # Row has wrong number of entries
     content = dedent("""
 2
@@ -63,6 +70,7 @@ def test_input_system_missing_values(tmp_path):
 
 
 def test_input_system_row_sum_error(tmp_path):
+    """Test that a row not summing to 1 raises a ValueError."""
     # Row sums not equal to 1
     content = dedent("""
 2
@@ -77,6 +85,7 @@ def test_input_system_row_sum_error(tmp_path):
 
 
 def test_input_system_no_file_fallback():
+    """Test that use_file=False raises NotImplementedError (not supported in Streamlit)."""
     # use_file=False should raise NotImplementedError
     with pytest.raises(NotImplementedError):
         input_probabilistic_transition_system(filename=None, use_file=False)

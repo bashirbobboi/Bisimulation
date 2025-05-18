@@ -9,6 +9,7 @@ from probisim.cli import app
 runner = CliRunner()
 
 def make_prism_model(tmp_path):
+    """Helper to create a simple PRISM model file for testing."""
     pm = tmp_path / "model.pm"
     pm.write_text(
         """
@@ -20,6 +21,7 @@ def make_prism_model(tmp_path):
 
 
 def test_parse_writes_internal_json(tmp_path):
+    """Test that the CLI 'parse' command writes a valid internal JSON file."""
     model_file = make_prism_model(tmp_path)
     internal = tmp_path / "internal.json"
 
@@ -35,6 +37,7 @@ def test_parse_writes_internal_json(tmp_path):
 
 
 def test_bisim_and_file_outputs(tmp_path, monkeypatch):
+    """Test the 'bisim' command and check that output PNG files are created."""
     # Prepare internal JSON
     internal = tmp_path / "int.json"
     internal.write_text(json.dumps({
@@ -66,6 +69,7 @@ def test_bisim_and_file_outputs(tmp_path, monkeypatch):
 
 
 def test_dist_and_heatmap(tmp_path, monkeypatch):
+    """Test the 'dist' command and check that the distance heatmap is saved."""
     internal = tmp_path / "int.json"
     internal.write_text(json.dumps({
         "T": [[1.0, 0.0], [0.0, 1.0]],
@@ -83,6 +87,7 @@ def test_dist_and_heatmap(tmp_path, monkeypatch):
 
 
 def test_explain_and_class_commands(tmp_path, monkeypatch):
+    """Test the 'explain', 'classof', and 'classes' commands for correct output."""
     internal = tmp_path / "int.json"
     internal.write_text(json.dumps({
         "T": [[1.0, 0.0], [0.5, 0.5]],
@@ -110,6 +115,7 @@ def test_explain_and_class_commands(tmp_path, monkeypatch):
 
 
 def test_manual_interactive(tmp_path, monkeypatch):
+    """Test the 'manual' command for interactive PTS entry."""
     out_file = tmp_path / "out.json"
     # simulate user entering: 2 states, non-terminating then terminating, transitions "2 1.0"
     user_input = "\n".join([
@@ -131,6 +137,7 @@ def test_manual_interactive(tmp_path, monkeypatch):
 
 
 def test_manual_error_parsing(tmp_path, monkeypatch):
+    """Test error handling in the 'manual' command for invalid input."""
     out_file = tmp_path / "err.json"
     # simulate invalid input causing parse error
     user_input = "\n".join([
@@ -148,6 +155,7 @@ def test_manual_error_parsing(tmp_path, monkeypatch):
 
 
 def test_simulate_and_compare(tmp_path, monkeypatch):
+    """Test the 'simulate' and 'compare-sim' commands for correct simulation output."""
     internal = tmp_path / "int.json"
     internal.write_text(json.dumps({
         "T": [[0.0, 1.0], [1.0, 0.0]],
@@ -175,6 +183,7 @@ def test_simulate_and_compare(tmp_path, monkeypatch):
 
 
 def test_simulate_show_runs(tmp_path, monkeypatch):
+    """Test the 'simulate' command with the --show-runs option for run sequence output."""
     internal = tmp_path / "int.json"
     internal.write_text(json.dumps({
         "T": [[0.0, 1.0], [1.0, 0.0]],
@@ -203,6 +212,7 @@ def test_simulate_show_runs(tmp_path, monkeypatch):
 
 
 def test_compare_sim_show_runs(tmp_path, monkeypatch):
+    """Test the 'compare-sim' command with the --show-runs option for run sequence output."""
     internal = tmp_path / "int.json"
     # simple two-state cyclic model
     internal.write_text(json.dumps({

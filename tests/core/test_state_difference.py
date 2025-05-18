@@ -1,9 +1,14 @@
+"""
+Unit tests for analyze_state_differences (state difference explanations).
+Covers termination mismatch, no contributions, and single contribution cases.
+"""
 import numpy as np
 import pytest
 
 from probisim.bisimdistance import analyze_state_differences
 
 def test_termination_mismatch():
+    """Test that a termination mismatch is explained correctly."""
     # Termination status differs
     T = np.array([[1.0, 0.0], [0.0, 1.0]])
     Term = np.array([1, 0], dtype=int)
@@ -19,6 +24,7 @@ def test_termination_mismatch():
 
 
 def test_no_contributions_when_no_costs():
+    """Test that no explanations are given when there are no positive costs."""
     # Same termination, but no positive costs => no explanations
     T = np.array([[0.5, 0.5], [0.5, 0.5]])
     Term = np.array([0, 0], dtype=int)
@@ -30,6 +36,7 @@ def test_no_contributions_when_no_costs():
 
 
 def test_single_contribution_flow():
+    """Test that a single flow contribution is explained correctly."""
     # Simple case with one flow contributing
     T = np.array([[1.0, 0.0], [0.0, 1.0]])
     Term = np.array([0, 0], dtype=int)

@@ -1,3 +1,7 @@
+"""
+Unit tests for wasserstein_distance (optimal transport/Wasserstein metric).
+Covers identical distributions, simple cases, rectangular cases, and infeasibility.
+"""
 import numpy as np
 import pytest
 
@@ -5,6 +9,7 @@ from probisim.bisimdistance import wasserstein_distance
 
 
 def test_identical_distributions_zero_cost():
+    """Test that identical distributions with zero cost yield zero distance and identity coupling."""
     # Distributions and cost matrix of size 1
     p = np.array([1.0])
     q = np.array([1.0])
@@ -17,6 +22,7 @@ def test_identical_distributions_zero_cost():
 
 
 def test_simple_two_point_distribution():
+    """Test two-point distributions with unit costs and check coupling properties."""
     # Two-point distributions with unit costs
     p = np.array([0.3, 0.7])
     q = np.array([0.5, 0.5])
@@ -34,6 +40,7 @@ def test_simple_two_point_distribution():
 
 
 def test_rectangular_distributions_conservation():
+    """Test rectangular distributions and conservation of mass in coupling."""
     # Rectangular case: p length 2, q length 3
     p = np.array([0.5, 0.5])
     q = np.array([1/3, 1/3, 1/3])
@@ -50,6 +57,7 @@ def test_rectangular_distributions_conservation():
 
 
 def test_infeasible_distributions_raise():
+    """Test that infeasible distributions (mismatched mass) raise ValueError."""
     # Mismatched total mass should be infeasible
     p = np.array([1.0])
     q = np.array([0.5])

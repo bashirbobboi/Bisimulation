@@ -1,3 +1,7 @@
+"""
+Unit tests for model parser dispatch and individual parser classes (Prism, JSON LTS, TXT).
+Covers valid parsing, error handling, and edge cases for all supported formats.
+"""
 import pytest
 import numpy as np
 import json
@@ -6,6 +10,7 @@ from probisim.parsers import PrismParser, JsonLTSParser, TxtParser, parse_model
 
 
 def test_parse_model_dispatch_valid_formats():
+    """Test that parse_model dispatches correctly for all supported formats."""
     json_str = '{"states": 1, "transitions": [], "terminating": [0]}'
     for fmt in ['txt', 'json', 'prism']:
         # For formats that expect content, we provide minimal valid inputs
@@ -22,11 +27,13 @@ def test_parse_model_dispatch_valid_formats():
 
 
 def test_parse_model_dispatch_invalid_format():
+    """Test that an unsupported format raises a ValueError."""
     with pytest.raises(ValueError):
         parse_model('anything', 'unsupported')
 
 
 def test_txt_parser_basic():
+    """Test TXT parser on a simple 2-state system with a label."""
     # 2-state system: state0->state1 with prob 1, state1 terminates
     txt_input = '''
 2
@@ -46,6 +53,7 @@ lbl01
 
 
 def test_txt_parser_row_length_mismatch():
+    """Test that a row length mismatch in TXT parser raises a ValueError."""
     # Row length not matching n
     bad_input = '2\n0.5 0.5 0.0\n0 1\n0 1'
     parser = TxtParser()
@@ -54,6 +62,7 @@ def test_txt_parser_row_length_mismatch():
 
 
 def test_txt_parser_term_length_mismatch():
+    """Test that a termination vector length mismatch in TXT parser raises a ValueError."""
     # Termination vector wrong length
     bad_input = '2\n0 1\n1 0\n0'
     parser = TxtParser()
@@ -62,6 +71,7 @@ def test_txt_parser_term_length_mismatch():
 
 
 def test_txt_parser_row_sum_error():
+    """Test that a non-terminating row not summing to 1 in TXT parser raises a ValueError."""
     # Non-terminating row does not sum to 1
     bad_input = '2\n0.3 0.3\n0 1\n0 1'
     parser = TxtParser()
@@ -70,6 +80,7 @@ def test_txt_parser_row_sum_error():
 
 
 def test_prism_parser_basic():
+    """Test PRISM parser on a simple chain model."""
     prism_input = '''
 // simple chain
 [] s=0 -> 1.0 : (s'=1);
@@ -88,6 +99,7 @@ def test_prism_parser_basic():
 
 
 def test_prism_parser_row_sum_error():
+    """Test that a row with sum !=1 in PRISM parser raises a ValueError."""
     # Row with sum !=1 and not a pure self-loop
     bad_input = '[] s=0 -> 0.5 : (s\'=1);'
     parser = PrismParser()
@@ -96,6 +108,7 @@ def test_prism_parser_row_sum_error():
 
 
 def test_json_parser_basic():
+    """Test JSON LTS parser on a 3-state system with labels and termination."""
     import json
     # Now explicitly mark states 1 and 2 as terminating to allow rows summing to zero
     data = {
@@ -116,6 +129,7 @@ def test_json_parser_basic():
     assert labels == {(0, 1): 'a'}
 
 def test_json_parser_row_sum_error():
+    """Test that a non-terminating row not summing to 1 in JSON parser raises a ValueError."""
     # Non-terminating row does not sum to 1
     data = {"states": 2, "transitions": [{"from": 0, "to": 1, "prob": 0.5}], "terminating": []}
     input_str = json.dumps(data)

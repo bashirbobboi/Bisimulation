@@ -1,3 +1,7 @@
+"""
+Unit tests for minimization and equivalence class computation in bisimulation.
+Covers relation refinement, class computation, and minimized matrix/label logic.
+"""
 import numpy as np
 import pytest
 
@@ -14,6 +18,7 @@ def make_full_relation(n):
 
 
 def test_refine_relation_identical_states():
+    """Test that two identical non-terminating states remain fully related after refinement."""
     # Two identical non-terminating states should remain fully related
     T = np.array([[0.5, 0.5], [0.5, 0.5]])
     Term = np.array([0, 0], dtype=int)
@@ -23,6 +28,7 @@ def test_refine_relation_identical_states():
 
 
 def test_refine_relation_termination_mismatch():
+    """Test that states with different termination status are not related after refinement."""
     # States with different termination status should not relate
     T = np.eye(2)
     Term = np.array([1, 0], dtype=int)
@@ -32,6 +38,7 @@ def test_refine_relation_termination_mismatch():
 
 
 def test_compute_equivalence_classes_full_relation():
+    """Test that a full relation on two states yields one equivalence class."""
     # Full relation on two states yields one equivalence class
     n = 2
     R_mat = np.ones((n, n), dtype=int)
@@ -45,6 +52,7 @@ def test_compute_equivalence_classes_full_relation():
 
 
 def test_compute_minimized_transition_matrix_full_relation():
+    """Test that minimized matrix is 1x1 with probability 1 when both states are equivalent."""
     # When both states are equivalent, minimized matrix is 1x1 with probability 1
     T = np.array([[0.5, 0.5], [0.5, 0.5]])
     eq_classes = {0: {0, 1}}
@@ -58,6 +66,7 @@ def test_compute_minimized_transition_matrix_full_relation():
 
 
 def test_full_minimization_chain_example():
+    """Test full minimization on a 3-state chain where two states are bisimilar."""
     # Three-state chain where states 2 and 3 are bisimilar
     T = np.array([
         [1.0, 0.0, 0.0],
@@ -100,6 +109,7 @@ def test_full_minimization_chain_example():
 
 
 def test_label_propagation_single_class():
+    """Test that labels are combined correctly when all states are in one class."""
     # Two original states (0,1) in one class, both transition to state 2 with different labels
     T = np.array([
         [0.0, 0.0, 1.0],  # state 0
@@ -124,6 +134,7 @@ def test_label_propagation_single_class():
 
 
 def test_label_deduplication():
+    """Test that duplicate labels are deduplicated in the minimized label output."""
     # Two states with same label on transitions to different targets but same class
     T = np.array([
         [0.5, 0.5],  # state 0 transitions to 0 and 1
@@ -145,6 +156,7 @@ def test_label_deduplication():
 
 
 def test_no_labels_leads_to_empty_dict():
+    """Test that no labels in input leads to an empty minimized label dict."""
     # No transitions_labels provided
     T = np.array([[1.0]])
     equiv = {0: {0}}
