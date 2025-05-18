@@ -6,6 +6,16 @@ def input_probabilistic_transition_system(filename=None, use_file=True):
     """
     Reads the transition matrix, terminating states, and transition labels from a file if use_file=True.
     Otherwise, it reads input from the command line.
+    Args:
+        filename: str, path to the input file.
+        use_file: bool, whether to read from file (True) or prompt (False).
+    Returns:
+        matrix: np.ndarray, transition matrix.
+        terminating_vector: np.ndarray, 0/1 vector for termination.
+        transition_labels: dict, transition labels.
+    Raises:
+        ValueError: If the file format is invalid or matrix rows do not sum to 1.
+        NotImplementedError: If use_file is False (not supported in Streamlit app).
     """
     if use_file and filename:
         with open(filename, "r") as f:
@@ -42,11 +52,21 @@ def input_probabilistic_transition_system(filename=None, use_file=True):
         raise NotImplementedError("Command-line input is not supported in the Streamlit app.")
 
 def refine_relation(R, transition_matrix, terminating_vector):
+    """
+    Iteratively refines a candidate relation R on states to the largest bisimulation relation.
+    Args:
+        R: Set of (i, j) pairs representing the current relation.
+        transition_matrix: np.ndarray, the transition matrix of the PTS.
+        terminating_vector: np.ndarray, 0/1 vector indicating terminating states.
+    Returns:
+        Set of (i, j) pairs representing the coarsest bisimulation relation.
+    """
     num_states = len(transition_matrix)
     def transition_prob(x, equivalence_classes):
         return {class_id: sum(transition_matrix[x, y] for y in equivalence_classes[class_id])
                 for class_id in equivalence_classes}
     while True:
+        # Partition-refinement loop: repeatedly split relation classes until stable
         new_R = set()
         equivalence_classes = {i: {j for j in range(num_states) if (i, j) in R} for i in range(num_states)}
         for x in range(num_states):
@@ -87,7 +107,7 @@ def compute_equivalence_classes(R, num_states, terminating_vector):
     if not np.all(R == R.T):
         raise ValueError("Relation must be symmetric")
 
-    # --- 3) Find connected components via DFS/BFS --- #
+    # --- 3) Find connected components #
     visited = set()
     equivalence_classes = {}
     state_class_map    = {}
@@ -124,6 +144,17 @@ def compute_equivalence_classes(R, num_states, terminating_vector):
     return equivalence_classes, state_class_map, class_termination_status
 
 def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels):
+    """
+    Compute the minimized transition matrix and labels for the quotient system under bisimulation.
+    Args:
+        transition_matrix: np.ndarray, original transition matrix.
+        equivalence_classes: dict, mapping class_id to set of states.
+        state_class_map: dict, mapping state to class_id.
+        transition_labels: dict, original transition labels.
+    Returns:
+        minimized_T: np.ndarray, minimized transition matrix.
+        minimized_labels: dict, minimized transition labels.
+    """
     num_classes = len(equivalence_classes)
     minimized_T = np.zeros((num_classes, num_classes))
     minimized_labels = {}
@@ -132,6 +163,7 @@ def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, 
             for y in range(len(transition_matrix)):
                 if transition_matrix[x, y] > 0:
                     target_class = state_class_map[y]
+                    # We average over all states in the class to preserve stochasticity in the quotient system
                     minimized_T[class_id, target_class] += transition_matrix[x, y] / len(class_states)
                     if (x, y) in transition_labels:
                         action = transition_labels[(x, y)]
@@ -148,12 +180,24 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 def bisimulation_distance_matrix(T, Term, tol=1e-6, max_iter=100):
+    """
+    Compute the bisimulation distance matrix via iterative LP solves (Wasserstein metric).
+    Args:
+        T: np.ndarray, transition matrix.
+        Term: np.ndarray, termination vector.
+        tol: float, convergence tolerance.
+        max_iter: int, maximum number of iterations.
+    Returns:
+        D: np.ndarray, bisimulation distance matrix.
+    """
     n = len(T)
     D = np.zeros((n, n))
     for i in range(n):
         for j in range(n):
             if Term[i] != Term[j]:
                 D[i, j] = 1.0
+    # Iteratively update D using the previous distance matrix as the cost for the Wasserstein LP
+    # This converges to the greatest fixed point (bisimulation metric)
     for iteration in range(max_iter):
         D_prev = D.copy()
         for i in range(n):
@@ -184,13 +228,25 @@ def bisimulation_distance_matrix(T, Term, tol=1e-6, max_iter=100):
     return D
 
 def generate_graphviz_source(T, Term, labels, is_minimized=False):
+    """
+    Generate a Graphviz DOT source string for a probabilistic transition system (PTS).
+    Args:
+        T: np.ndarray, transition matrix.
+        Term: np.ndarray, termination vector.
+        labels: dict, transition labels (optional).
+        is_minimized: bool, whether to use 'Class' or 'State' as node prefix.
+    Returns:
+        str: Graphviz DOT source representing the PTS.
+    """
     prefix = "Class" if is_minimized else "State"
     dot = Digraph(format='png')
+    # Add nodes with different styles for terminating/non-terminating
     for i in range(len(T)):
         if Term[i]:
             dot.node(f"{prefix} {i+1}", f"{prefix} {i+1}", shape='circle', style='filled', peripheries='2', color='lightblue')
         else:
             dot.node(f"{prefix} {i+1}", f"{prefix} {i+1}", shape='circle', style='filled', color='lightgreen')
+    # Add edges for all nonzero transitions, including labels if present
     for i in range(len(T)):
         if Term[i]:
             continue
@@ -208,17 +264,36 @@ def generate_graphviz_source(T, Term, labels, is_minimized=False):
     return dot.source
 
 def wasserstein_distance(p, q, C):
+    """
+    Compute the Wasserstein (earth mover's) distance between two distributions p and q with cost matrix C.
+    Args:
+        p: np.ndarray, source probability vector.
+        q: np.ndarray, target probability vector.
+        C: np.ndarray, cost matrix.
+    Returns:
+        distance: float, optimal transport cost.
+        coupling: np.ndarray, optimal transport plan.
+    Raises:
+        ValueError: If the LP does not converge.
+    """
+    # Solve the optimal transport problem as a linear program; the coupling matrix gives the transport plan
+    # The LP minimizes total cost c^T x subject to:
+    #   - Each row of the coupling sums to p (source marginals)
+    #   - Each column of the coupling sums to q (target marginals)
+    #   - All entries are non-negative
     n, m = len(p), len(q)
-    c = C.flatten()
+    c = C.flatten()  # Cost vector for the LP
     A_eq = []
     b_eq = []
 
+    # Row constraints: sum of each row in the coupling equals p[i]
     for i in range(n):
         row = np.zeros(n * m)
         row[i * m:(i + 1) * m] = 1
         A_eq.append(row)
         b_eq.append(p[i])
 
+    # Column constraints: sum of each column in the coupling equals q[j]
     for j in range(m):
         col = np.zeros(n * m)
         for i in range(n):
@@ -226,15 +301,29 @@ def wasserstein_distance(p, q, C):
         A_eq.append(col)
         b_eq.append(q[j])
 
-    bounds = [(0, None)] * (n * m)
+    bounds = [(0, None)] * (n * m)  # All transport variables must be non-negative
+    # Use scipy.optimize.linprog to solve the LP efficiently
+    # 'highs' is a modern, fast LP solver
     res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
     if res.success:
+        # The optimal coupling matrix (transport plan) tells how much mass to move from p[i] to q[j]
         coupling = res.x.reshape((n, m))
         return res.fun, coupling
     else:
         raise ValueError("Wasserstein LP did not converge: " + res.message)
 
 def analyze_state_differences(idx1, idx2, T, Term, D_prev):
+    """
+    Provides a human-readable explanation of why two states differ in behavior, based on their bisimulation distance and transition structure.
+    Args:
+        idx1: int, index of the first state.
+        idx2: int, index of the second state.
+        T: np.ndarray, transition matrix.
+        Term: np.ndarray, termination vector.
+        D_prev: np.ndarray, precomputed distance matrix.
+    Returns:
+        List of strings explaining the main sources of difference between the two states.
+    """
     explanations = []
     # 1) Termination
     if Term[idx1] != Term[idx2]:
@@ -265,7 +354,7 @@ def analyze_state_differences(idx1, idx2, T, Term, D_prev):
                 f"(probability = {p1:.2f}) vs From State {idx2+1} to State {j+1} "
                 f"(probability = {p2:.2f}) → this contributes {contrib:.3f} to their distance"
             )
-        # optional note if you truncated
+        # Only show the top 3 contributions for clarity, as there may be many small ones
         if len(moves) > 3:
             explanations.append("Note: Only the top 3 contributing transitions are shown here for clarity.")
     return explanations

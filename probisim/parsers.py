@@ -1,3 +1,6 @@
+"""
+Pluggable model parsers for probabilistic transition systems (PTS), supporting PRISM, JSON LTS, and legacy TXT formats. Provides a registry and dispatch for parsing models into transition matrices, termination vectors, and label dictionaries.
+"""
 import abc
 import numpy as np
 
@@ -136,13 +139,16 @@ PARSER_REGISTRY = {
 def parse_model(input_str, fmt):
     """
     Dispatch to the correct parser based on format string.
-    fmt: 'prism' or 'json' or 'txt'
-    Returns (T, Term, labels) as 0-based numpy arrays.
+    Args:
+        input_str: str, the model as a string.
+        fmt: str, one of 'prism', 'json', or 'txt'.
+    Returns:
+        (T, Term, labels): tuple of np.ndarray, np.ndarray, dict
     """
     if fmt not in PARSER_REGISTRY:
         raise ValueError(f"Unknown model format: {fmt}")
     return PARSER_REGISTRY[fmt].parse(input_str)
 
-# To add a new format:
+# For users that want to add a new format:
 # 1. Implement a new class XParser(ModelParser) with a parse() method.
 # 2. Add it to PARSER_REGISTRY, e.g. 'x': XParser(), 

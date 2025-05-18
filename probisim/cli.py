@@ -21,6 +21,16 @@ from probisim.bisimdistance import (
 app = typer.Typer()
 
 def save_internal_json(T, Term, labels, filename):
+    """
+    Save the internal PTS representation to a JSON file.
+    Args:
+        T: np.ndarray, transition matrix.
+        Term: np.ndarray, termination vector.
+        labels: dict, transition labels.
+        filename: str, output file path.
+    Returns:
+        None
+    """
     data = {
         'T': T.tolist(),
         'Term': Term.tolist(),
@@ -30,6 +40,15 @@ def save_internal_json(T, Term, labels, filename):
         json.dump(data, f)
 
 def load_internal_json(filename):
+    """
+    Load the internal PTS representation from a JSON file.
+    Args:
+        filename: str, input file path.
+    Returns:
+        T: np.ndarray, transition matrix.
+        Term: np.ndarray, termination vector.
+        labels: dict, transition labels.
+    """
     with open(filename, 'r') as f:
         data = json.load(f)
     T = np.array(data['T'])
@@ -41,6 +60,15 @@ def load_internal_json(filename):
 def parse(input_file: str, fmt: str = typer.Argument(..., help="Model format: prism or json"), to: str = typer.Option(..., help="Output file (internal JSON format)")):
     """
     Parse a model file and save as internal JSON.
+
+    Args:
+        input_file: str, path to the model file.
+        fmt: str, model format ('prism', 'json', or 'txt').
+        to: str, output file path for internal JSON.
+    Returns:
+        None. Writes the parsed model to disk.
+    Raises:
+        ValueError: If the model format is unknown or parsing fails.
     """
     if fmt == "txt":
         T, Term, labels = input_probabilistic_transition_system(filename=input_file, use_file=True)
@@ -55,13 +83,19 @@ def parse(input_file: str, fmt: str = typer.Argument(..., help="Model format: pr
 def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", help="Run minimization and show statistics")):
     """
     Run bisimulation minimization and print statistics.
+
+    Args:
+        input_file: str, path to the internal JSON file.
+        minimize: bool, whether to run minimization and show statistics.
+    Returns:
+        None. Prints statistics and saves images to disk.
     """
     T, Term, labels = load_internal_json(input_file)
     n = len(T)
     # Minimization
     R_0 = {(x, y) for x in range(n) for y in range(n)}
     R_n = refine_relation(R_0, T, Term)
-    # Convert relation set to matrix
+    # Convert relation set to matrix for equivalence class computation
     R_mat = np.zeros((n, n), dtype=int)
     for x, y in R_n:
         R_mat[x, y] = 1
@@ -103,6 +137,11 @@ def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", hel
 def dist(input_file: str):
     """
     Compute and print the distance matrix, heatmap, and distance metrics.
+
+    Args:
+        input_file: str, path to the internal JSON file.
+    Returns:
+        None. Prints distance matrix, metrics, and saves heatmap to disk.
     """
     T, Term, labels = load_internal_json(input_file)
     D = bisimulation_distance_matrix(T, Term)
@@ -165,6 +204,13 @@ def dist(input_file: str):
 def explain(input_file: str, state1: int = typer.Argument(...), state2: int = typer.Argument(...)):
     """
     Explain why two states are similar or different.
+
+    Args:
+        input_file: str, path to the internal JSON file.
+        state1: int, first state (1-based).
+        state2: int, second state (1-based).
+    Returns:
+        None. Prints explanation to stdout.
     """
     T, Term, labels = load_internal_json(input_file)
     D = bisimulation_distance_matrix(T, Term)
@@ -178,12 +224,18 @@ def explain(input_file: str, state1: int = typer.Argument(...), state2: int = ty
 def classof(input_file: str, state: int = typer.Argument(...)):
     """
     Show the equivalence class for a given state.
+
+    Args:
+        input_file: str, path to the internal JSON file.
+        state: int, state index (1-based).
+    Returns:
+        None. Prints equivalence class info to stdout.
     """
     T, Term, labels = load_internal_json(input_file)
     n = len(T)
     R_0 = {(x, y) for x in range(n) for y in range(n)}
     R_n = refine_relation(R_0, T, Term)
-    # Convert relation set to matrix
+    # Convert relation set to matrix for equivalence class computation
     R_mat = np.zeros((n, n), dtype=int)
     for x, y in R_n:
         R_mat[x, y] = 1
@@ -197,12 +249,17 @@ def classof(input_file: str, state: int = typer.Argument(...)):
 def classes(input_file: str):
     """
     List all equivalence classes and their members.
+
+    Args:
+        input_file: str, path to the internal JSON file.
+    Returns:
+        None. Prints all equivalence classes to stdout.
     """
     T, Term, labels = load_internal_json(input_file)
     n = len(T)
     R_0 = {(x, y) for x in range(n) for y in range(n)}
     R_n = refine_relation(R_0, T, Term)
-    # Convert relation set to matrix
+    # Convert relation set to matrix for equivalence class computation
     R_mat = np.zeros((n, n), dtype=int)
     for x, y in R_n:
         R_mat[x, y] = 1
@@ -217,6 +274,11 @@ def classes(input_file: str):
 def manual(to: str = typer.Option(..., help="Output file (internal JSON format)")):
     """
     Enter a PTS interactively from the command line and save as internal JSON.
+
+    Args:
+        to: str, output file path for internal JSON.
+    Returns:
+        None. Prompts user for input and writes file.
     """
     typer.echo("Manual Probabilistic Transition System Entry")
     n = typer.prompt("How many states?", type=int)
@@ -278,6 +340,15 @@ def simulate(
 ):
     """
     Simulate random runs from a starting state and report statistics.
+
+    Args:
+        input_file: str, path to the internal JSON file.
+        start_state: int, starting state (1-based).
+        num_simulations: int, number of simulation runs.
+        max_steps: int, maximum steps per run.
+        show_runs: bool, whether to show up to 10 run sequences.
+    Returns:
+        None. Prints simulation statistics and sample runs.
     """
     T, Term, labels = load_internal_json(input_file)
     n = len(T)
@@ -287,13 +358,14 @@ def simulate(
     termination_count = 0
     max_steps_reached = 0
 
+    # Run multiple simulations from the chosen initial state
     for sim in range(num_simulations):
         run = [start_idx]
         steps = 0
         state = start_idx
         while steps < max_steps:
             if Term[state]:
-                break
+                break  # Stop if a terminating state is reached
             next_state = np.random.choice(n, p=T[state])
             run.append(next_state)
             state = next_state
@@ -305,6 +377,7 @@ def simulate(
         if steps > max_steps_reached:
             max_steps_reached = steps
 
+    # Compute summary statistics for the simulation runs
     avg_steps = np.mean(steps_to_termination)
     termination_rate = termination_count / num_simulations
 
@@ -315,6 +388,7 @@ def simulate(
 
     if show_runs:
         typer.echo("\nSample Run Sequences (up to 10):")
+        # Show up to 10 individual run sequences for inspection
         for i, run in enumerate(all_runs[:10]):
             run_str = ' → '.join(f"S{s+1}" for s in run)
             final_state = run[-1]
@@ -335,12 +409,23 @@ def compare_sim(
 ):
     """
     Compare simulation statistics and sample runs from two different starting states.
+
+    Args:
+        input_file: str, path to the internal JSON file.
+        state1: int, first starting state (1-based).
+        state2: int, second starting state (1-based).
+        num_runs: int, number of comparative runs.
+        max_steps: int, maximum steps per run.
+        show_runs: bool, whether to show up to 5 run sequences for each state.
+    Returns:
+        None. Prints comparative statistics and sample runs.
     """
     T, Term, labels = load_internal_json(input_file)
     n = len(T)
     idx1 = state1 - 1
     idx2 = state2 - 1
 
+    # Helper function to simulate multiple runs from a given initial state
     def simulate_runs(start_idx):
         all_runs = []
         steps_to_termination = []
@@ -352,7 +437,7 @@ def compare_sim(
             state = start_idx
             while steps < max_steps:
                 if Term[state]:
-                    break
+                    break  # Stop if a terminating state is reached
                 next_state = np.random.choice(n, p=T[state])
                 run.append(next_state)
                 state = next_state
@@ -363,13 +448,16 @@ def compare_sim(
                 termination_count += 1
             if steps > max_steps_reached:
                 max_steps_reached = steps
+        # Compute summary statistics for this batch of runs
         avg_steps = np.mean(steps_to_termination)
         termination_rate = termination_count / num_runs
         return avg_steps, termination_rate, max_steps_reached, all_runs
 
+    # Run simulations for both initial states
     avg1, rate1, max1, runs1 = simulate_runs(idx1)
     avg2, rate2, max2, runs2 = simulate_runs(idx2)
 
+    # Print comparative statistics for both starting states
     typer.echo(f"\nComparative Simulation Results:")
     typer.echo(f"  State {state1}:")
     typer.echo(f"    Average Steps to Termination: {avg1:.2f}")
@@ -382,6 +470,7 @@ def compare_sim(
 
     if show_runs:
         typer.echo(f"\nSample Run Sequences (up to 5 each):")
+        # Show up to 5 individual run sequences for each initial state
         for i, run in enumerate(runs1[:5]):
             run_str = ' → '.join(f"S{s+1}" for s in run)
             final_state = run[-1]
