@@ -663,6 +663,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                 ax.set_title('Distribution of State Distances')
                 ax.set_xlabel('Distance')
                 ax.set_ylabel('Number of State Pairs')
+                ax.set_xticks(np.arange(0, 1.01, 0.1))
                 ax.legend()
                 st.pyplot(fig)
 
