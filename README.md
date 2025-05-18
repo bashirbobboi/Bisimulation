@@ -73,7 +73,7 @@ The web interface provides:
 
 ---
 
-## 🛠️ Command-Line Interface
+## Command-Line Interface
 
 All commands are exposed via the `cli.py` script. Use the `--help` flag to explore options for each command.
 
@@ -109,7 +109,7 @@ All commands are exposed via the `cli.py` script. Use the `--help` flag to explo
   ```bash
   python cli.py explain internal.json 1 2
   ```
-  <sub>Explains why state 1 and state 2 are (not) bisimilar.</sub>
+  <sub>Explains level of similarity between state 1 and state 2 .</sub>
 
 - **Get equivalence class of a state:**
   ```bash
