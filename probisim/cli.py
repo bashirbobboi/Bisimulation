@@ -330,6 +330,7 @@ def compare_sim(
     state1: int = typer.Option(..., help="First starting state (1-based)"),
     state2: int = typer.Option(..., help="Second starting state (1-based)"),
     num_runs: int = typer.Option(20, help="Number of comparative runs"),
+    max_steps: int = typer.Option(100, help="Maximum steps per run"),
     show_runs: bool = typer.Option(False, help="Show up to 5 run sequences for each state")
 ):
     """
@@ -349,7 +350,7 @@ def compare_sim(
             run = [start_idx]
             steps = 0
             state = start_idx
-            while steps < 100:  # Default max steps per run
+            while steps < max_steps:
                 if Term[state]:
                     break
                 next_state = np.random.choice(n, p=T[state])
