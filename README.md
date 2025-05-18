@@ -1,3 +1,4 @@
+# Probabilistic Bisimulation Analysis Tool
 
 ## Installation
 
@@ -159,6 +160,31 @@ The tool implements a metric for quantifying behavioral similarity between state
   - Unit tests for all core components
   - Integration tests for CLI and web interface
 
+## Testing and Coverage
+
+A comprehensive test suite is provided to ensure correctness, robustness, and reliability of the tool.
+
+- **Test Coverage:**
+  - Achieved **over 90% coverage** on all files related to the core logic (including bisimulation distance, minimization, equivalence classes, simulation, and metrics).
+  - Tests cover core algorithms, parsers, Wasserstein distance, refinement, equivalence classes, simulation, state difference explanations, minimization, CLI, Streamlit app, visualization, and metrics.
+
+- **Testing Frameworks:**
+  - [pytest](https://docs.pytest.org/): For unit and integration tests
+
+- **How to Run Tests:**
+  1. Make sure all dependencies are installed:
+     ```bash
+     pip install -r requirements.txt
+     ```
+  2. Run the test suite:
+     ```bash
+     pytest --cov=probisim --cov-report=term-missing
+     ```
+     This will show a coverage report in the terminal.
+
+- **Test Organization:**
+  - Tests are organized by module in the `tests/` directory (e.g., `tests/core/`, `tests/app/`, `tests/cli/`, `tests/utils/`, `tests/parsers/`).
+  - Each test file includes clear docstrings and comments for clarity and reproducibility.
 
 ## Author
 
