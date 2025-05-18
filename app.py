@@ -522,10 +522,6 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                         st.success(f"States S{min_pairs[0][0]+1} and S{min_pairs[0][1]+1} are most similar with distance {min_distance:.3f}")
                         # Add explanation for this pair
                         explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D)
-                        st.markdown("##### Why these states are similar:")
-                        for explanation in explanations[:3]:  # Show only top 3
-                            st.write(explanation)
-                        st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
                     else:
                         st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f})")
                         # Create a table for similar states
