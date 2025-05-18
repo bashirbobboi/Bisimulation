@@ -1,31 +1,3 @@
-# Probabilistic Bisimulation Analysis Tool
-
-A comprehensive tool for analyzing probabilistic transition systems (PTS), focusing on bisimulation distance, minimization, and system metrics. This project was developed as part of a dissertation on probabilistic bisimulation and behavioral equivalence.
-
-## Features
-
-- **Bisimulation Analysis**
-  - Compute bisimulation distances between states
-  - Identify bisimilar states and equivalence classes
-  - Minimize PTS while preserving behavioral equivalence
-  - Analyze state differences and explain discrepancies
-
-- **Multiple Input Methods**
-  - File upload support for various formats
-  - Manual PTS entry through interactive interface
-  - Built-in benchmark examples
-  - Command-line interface
-
-- **Visualization & Analysis**
-  - Interactive state space visualization
-  - Distance matrix heatmaps
-  - Transition probability graphs
-  - Comparative analysis of different metrics
-
-- **Theoretical Background**
-  - Implementation of Wasserstein distance for probability distributions
-  - Support for various distance metrics (Euclidean, KL-divergence, bisimulation)
-  - Simulation and comparative simulation analysis
 
 ## Installation
 
