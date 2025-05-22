@@ -255,7 +255,7 @@ def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, 
         if x not in state_class_map:
             continue
         source_class = state_class_map[x]
-            for y in range(len(transition_matrix)):
+        for y in range(len(transition_matrix)):
             if y not in state_class_map:
                 continue
             target_class = state_class_map[y]
@@ -269,14 +269,14 @@ def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, 
     for (x, y), label in transition_labels.items():
         if x in state_class_map and y in state_class_map:
             source_class = state_class_map[x]
-                    target_class = state_class_map[y]
+            target_class = state_class_map[y]
             if (source_class, target_class) not in minimized_labels:
                 minimized_labels[(source_class, target_class)] = set()
             minimized_labels[(source_class, target_class)].add(label)
     
     return minimized_T, minimized_labels
 
-def analyze_state_differences(idx1, idx2, T, Term, D_prev, equivalence_classes, minimized_T, class_termination):
+def analyze_state_differences(idx1, idx2, T, Term, D_classes, equivalence_classes, minimized_T, class_termination):
     """
     Provides a human-readable explanation of why two states differ in behavior, based on their bisimulation distance and transition structure.
     Uses the minimized system to analyze differences between equivalence classes.
@@ -285,7 +285,7 @@ def analyze_state_differences(idx1, idx2, T, Term, D_prev, equivalence_classes, 
         idx2: int, index of the second state.
         T: np.ndarray, transition matrix.
         Term: np.ndarray, termination vector.
-        D_prev: np.ndarray, precomputed distance matrix.
+        D_classes: np.ndarray, class-level distance matrix.
         equivalence_classes: dict, mapping class_id to set of states.
         minimized_T: np.ndarray, minimized transition matrix.
         class_termination: dict, mapping class_id to termination status.
@@ -312,16 +312,9 @@ def analyze_state_differences(idx1, idx2, T, Term, D_prev, equivalence_classes, 
     if Term[idx1] == Term[idx2]:
         # Compute distance between the two classes we're interested in
         num_classes = len(equivalence_classes)
-        print(f"Debug: num_classes = {num_classes}")
-        print(f"Debug: D_prev shape = {D_prev.shape}")
         
-        # Create cost matrix for just the two classes we're comparing
-        c = np.zeros((num_classes, num_classes))
-        for i in range(num_classes):
-            for j in range(num_classes):
-                c[i, j] = D_prev[i, j]
-        c = c.flatten()
-        print(f"Debug: c shape after flatten = {c.shape}")
+        # Use the class-level distance matrix for the cost
+        c = D_classes.flatten()
         
         A_eq = []
         b_eq = []
@@ -344,9 +337,6 @@ def analyze_state_differences(idx1, idx2, T, Term, D_prev, equivalence_classes, 
         A_eq = np.array(A_eq)
         b_eq = np.array(b_eq)
         
-        print(f"Debug: A_eq shape = {A_eq.shape}")
-        print(f"Debug: c length = {len(c)}")
-        
         # Verify dimensions match
         if len(c) != A_eq.shape[1]:
             raise ValueError(f"Dimension mismatch: c length ({len(c)}) != A_eq columns ({A_eq.shape[1]})")
@@ -361,28 +351,26 @@ def analyze_state_differences(idx1, idx2, T, Term, D_prev, equivalence_classes, 
             coupling = res.x.reshape((num_classes, num_classes))
             
             # Analyze the coupling to explain differences
+            explanations.append("Contributions to distance:")
             moves = []
+            # Collect all contributions, even small ones
             for i in range(num_classes):
                 for j in range(num_classes):
                     flow = coupling[i,j]
-                    if flow > 1e-8 and D_prev[i,j] > 0:
-                        contrib = flow * D_prev[i,j]
-                        if contrib > 1e-3:   # filter out tiny ones
-                            # Get representative states from each class
-                            rep_i = next(iter(equivalence_classes[i]))
-                            rep_j = next(iter(equivalence_classes[j]))
-                            moves.append((rep_i, rep_j, minimized_T[class1,i], minimized_T[class2,j], contrib))
-            
+                    contrib = flow * D_classes[i,j]
+                    if flow > 1e-8 and contrib > 1e-8:  # Only keep nonzero contributions
+                        moves.append((i, j, minimized_T[class1,i], minimized_T[class2,j], contrib))
             # Sort by contribution and show top 3
             moves.sort(key=lambda x: x[4], reverse=True)
             for i, j, p1, p2, contrib in moves[:3]:
                 explanations.append(
-                    f"Transition from State {idx1+1} to State {i+1} "
-                    f"(probability = {p1:.2f}) vs From State {idx2+1} to State {j+1} "
-                    f"(probability = {p2:.2f}) → this contributes {contrib:.3f} to their distance"
+                    f"  Class {class1+1} → Class {i+1} (p={p1:.2f}) vs "
+                    f"Class {class2+1} → Class {j+1} (p={p2:.2f}) "
+                    f"contributes {contrib:.6f} to the distance"
                 )
-            if len(moves) > 3:
-                explanations.append("Note: Only the top 3 contributing transitions are shown here for clarity.")
+            if not moves:
+                explanations.append("  (No nonzero contributions to the distance.)")
+            explanations.append(f"Total distance between states: {dist:.6f}")
     
     return explanations
 
@@ -429,6 +417,7 @@ def bisimulation_distance_matrix(T, Term, tol=1e-6, max_iter=100):
                 
                 # Set up the LP for the minimized system
                 c = D_prev.flatten()
+
                 A_eq = []
                 b_eq = []
                 
@@ -474,7 +463,9 @@ def bisimulation_distance_matrix(T, Term, tol=1e-6, max_iter=100):
         for j in range(n):
             D[i, j] = D_minimized[state_class_map[i], state_class_map[j]]
     
-    return D, equivalence_classes, minimized_T, class_termination
+    D_classes = D_minimized.copy()
+    
+    return D, equivalence_classes, minimized_T, class_termination, D_classes
 
 def generate_graphviz_source(T, Term, labels, is_minimized=False):
     """

@@ -376,7 +376,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
     try:
         # --- Distance computation timing ---
         start_dist = time.time()
-        D, equivalence_classes, minimized_T, class_termination = bisimulation_distance_matrix(T, Term)
+        D, equivalence_classes, minimized_T, class_termination, D_classes = bisimulation_distance_matrix(T, Term)
         end_dist = time.time()
         dist_time = end_dist - start_dist
 
@@ -447,7 +447,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                     if state1 != "Select a state..." and state2 != "Select a state...":
                         idx1 = int(state1.split()[1]) - 1
                         idx2 = int(state2.split()[1]) - 1
-                        explanations = analyze_state_differences(idx1, idx2, T, Term, D, equivalence_classes, minimized_T, class_termination)
+                        explanations = analyze_state_differences(idx1, idx2, T, Term, D_classes, equivalence_classes, minimized_T, class_termination)
                         st.markdown(f"#### Distance between {state1} and {state2}: {D[idx1, idx2]:.3f}")
                         
                         if idx1 == idx2:
@@ -467,7 +467,8 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                         else:
                             st.markdown("##### Why these states differ:")
                             for line in explanations:
-                                st.markdown(f"- {line}")
+                                if line.strip():  # Only show non-empty lines
+                                    st.markdown(f"- {line}")
                             # footnote if more than 3 transitions exist
                             total_diffs = sum(
                                 1 for j in range(len(T))
@@ -475,7 +476,6 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                             )
                             if total_diffs > 0 and D[idx1,idx2] < 1.0:
                                 st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
-                                                        # termination‐only note
                             if explanations and explanations[0].startswith("Termination mismatch") and D[idx1,idx2] == 1.0:
                                 st.markdown("*Note: This alone contributes the full distance of 1.0*")
                     else:
@@ -520,7 +520,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                     if len(min_pairs) == 1:
                         st.success(f"States S{min_pairs[0][0]+1} and S{min_pairs[0][1]+1} are most similar with distance {min_distance:.3f}")
                         # Add explanation for this pair
-                        explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D, equivalence_classes, minimized_T, class_termination)
+                        explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D_classes, equivalence_classes, minimized_T, class_termination)
                     else:
                         st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f})")
                         # Create a table for similar states
@@ -541,10 +541,11 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                     if len(max_pairs) == 1:
                         st.error(f"States S{max_pairs[0][0]+1} and S{max_pairs[0][1]+1} are most different with distance {max_distance:.3f}")
                         # Add explanation for this pair
-                        explanations = analyze_state_differences(max_pairs[0][0], max_pairs[0][1], T, Term, D, equivalence_classes, minimized_T, class_termination)
+                        explanations = analyze_state_differences(max_pairs[0][0], max_pairs[0][1], T, Term, D_classes, equivalence_classes, minimized_T, class_termination)
                         st.markdown("##### Why these states differ:")
                         for explanation in explanations[:3]:  # Show only top 3
-                            st.write(explanation)
+                            if explanation.strip():
+                                st.write(explanation)
                         st.markdown("*Note: Only the top 3 contributing transitions are shown here for clarity.*")
                     else:
                         st.error(f"Found {len(max_pairs)} pairs of most different states (distance: {max_distance:.3f})")

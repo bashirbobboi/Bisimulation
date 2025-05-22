@@ -213,9 +213,9 @@ def explain(input_file: str, state1: int = typer.Argument(...), state2: int = ty
         None. Prints explanation to stdout.
     """
     T, Term, labels = load_internal_json(input_file)
-    D = bisimulation_distance_matrix(T, Term)
+    D, equivalence_classes, minimized_T, class_termination, D_classes = bisimulation_distance_matrix(T, Term)
     idx1, idx2 = state1 - 1, state2 - 1
-    explanations = analyze_state_differences(idx1, idx2, T, Term, D)
+    explanations = analyze_state_differences(idx1, idx2, T, Term, D_classes, equivalence_classes, minimized_T, class_termination)
     typer.echo(f"Distance between S{state1} and S{state2}: {D[idx1, idx2]:.3f}")
     for line in explanations:
         typer.echo(f"- {line}")
