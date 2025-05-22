@@ -366,7 +366,7 @@ def analyze_state_differences(idx1, idx2, T, Term, D_classes, equivalence_classe
                 explanations.append(
                     f"  Class {class1+1} → Class {i+1} (p={p1:.2f}) vs "
                     f"Class {class2+1} → Class {j+1} (p={p2:.2f}) "
-                    f"contributes {contrib:.6f} to the distance"
+                    f"contributes {contrib:.4f} to the distance"
                 )
             if not moves:
                 explanations.append("  (No nonzero contributions to the distance.)")

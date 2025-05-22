@@ -245,7 +245,7 @@ def classof(input_file: str, state: int = typer.Argument(...)):
         R_mat[x, y] = 1
     equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
     class_id = state_class_map[state - 1]
-    class_states = sorted([s+1 for s in equivalence_classes[class_id]])
+    class_states = sorted([int(s)+1 for s in equivalence_classes[class_id]])
     term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
     typer.echo(f"State S{state} is in equivalence class {class_id+1}: {class_states} ({term})")
 
@@ -270,7 +270,7 @@ def classes(input_file: str):
     equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
     typer.echo("Equivalence Classes:")
     for class_id, class_states in equivalence_classes.items():
-        class_states_sorted = sorted([s+1 for s in class_states])
+        class_states_sorted = sorted([int(s)+1 for s in class_states])
         term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
         typer.echo(f"  Class {class_id+1}: {class_states_sorted} ({term})")
 
