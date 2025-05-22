@@ -16,6 +16,7 @@ from probisim.bisimdistance import (
 import pandas as pd
 import time
 from probisim.parsers import parse_model
+import plotly.express as px
 
 # Create necessary directories if they don't exist
 Path("txt").mkdir(exist_ok=True)
@@ -181,7 +182,7 @@ if input_mode == "Benchmark Datasets":
             num_states = st.number_input(
                 "Number of States",
                 min_value=2,
-                max_value=10,
+                max_value=100,
                 value=4,
                 help="Choose how many states your random system should have"
             )
@@ -407,22 +408,25 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
             
             st.markdown("#### Distance Matrix")
             with st.expander("Show Distance Table", expanded=True):
-                df = pd.DataFrame(np.round(D, 3), 
+                df = pd.DataFrame(np.round(D, 2), 
                                 index=[f"State {i+1}" for i in range(len(D))],
                                 columns=[f"State {i+1}" for i in range(len(D))])
                 st.dataframe(df)
 
             st.markdown("#### Distance Heatmap")
             with st.expander("Show Distance Heatmap", expanded=True):
-                fig, ax = plt.subplots(figsize=(6, 4))
-                sns.heatmap(D, annot=True, cmap="YlOrRd", fmt=".3f",
-                            xticklabels=[f"State {i+1}" for i in range(len(D))],
-                            yticklabels=[f"State {i+1}" for i in range(len(D))],
-                            annot_kws={"size": 8})
-                ax.tick_params(axis='both', which='major', labelsize=8)
-                plt.title("Bisimulation Distance Heatmap", pad=8, size=12)
-                plt.tight_layout()
-                st.pyplot(fig, use_container_width=True)
+                fig = px.imshow(
+                    D,
+                    labels=dict(x="State", y="State", color="Distance"),
+                    x=[f"S{i+1}" for i in range(n)],
+                    y=[f"S{i+1}" for i in range(n)],
+                    aspect="auto",
+                    color_continuous_scale="YlOrRd",
+                    text_auto=".2f"  # Show values to 2 decimal places
+                )
+                fig.update_xaxes(tickangle=45)
+                fig.update_layout(title="Bisimulation Distance Heatmap", autosize=True)
+                st.plotly_chart(fig, use_container_width=True)
                 
                 st.markdown("### 🔍 Analyze State Differences")
                 st.markdown("""
