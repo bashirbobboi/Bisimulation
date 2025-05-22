@@ -467,67 +467,6 @@ def bisimulation_distance_matrix(T, Term, tol=1e-6, max_iter=100):
     
     return D, equivalence_classes, minimized_T, class_termination, D_classes
 
-def bisimulation_distance_matrix_cached(T, Term, tol=1e-6, max_iter=100):
-    """
-    Same as bisimulation_distance_matrix, but caches each Wasserstein solve between two class-level distributions.
-    """
-    n = len(T)
-
-    # 1) minimize system
-    R = refine_relation({(i,i) for i in range(n)}, T, Term)
-    R_mat = np.zeros((n,n),int)
-    for i,j in R:
-        R_mat[i,j] = 1
-    eq_classes, _, class_term = compute_equivalence_classes(R_mat, n, Term)
-    Tmin, _ = compute_minimized_transition_matrix(T, eq_classes, {})
-
-    k = len(eq_classes)
-    # init class distances
-    Dk = np.zeros((k,k))
-    for i in range(k):
-        for j in range(k):
-            if class_term[i] != class_term[j]:
-                Dk[i,j] = 1.0
-
-    # a simple cache: maps ((p_tuple),(q_tuple)) -> (distance, coupling_matrix)
-    coupling_cache = {}
-
-    def cached_wasserstein(p, q, C):
-        # round probabilities to avoid float‐hash issues
-        key = (tuple(np.round(p,8)), tuple(np.round(q,8)))
-        # exploit symmetry: W(p,q)=W(q,p) if C symmetric
-        if key not in coupling_cache and key[::-1] in coupling_cache:
-            key = key[::-1]
-        if key not in coupling_cache:
-            dist, coup = wasserstein_distance(p, q, C)
-            coupling_cache[key] = (dist, coup)
-        return coupling_cache[key]
-
-    # 2) iterative refinement on classes
-    for _ in range(max_iter):
-        D_prev = Dk.copy()
-        for i in range(k):
-            for j in range(k):
-                if class_term[i] != class_term[j]:
-                    continue
-                p = Tmin[i]
-                q = Tmin[j]
-                C = D_prev  # flattened inside wasserstein_distance
-                dist, _ = cached_wasserstein(p, q, C)
-                Dk[i,j] = dist
-
-        if np.max(np.abs(Dk - D_prev)) < tol:
-            break
-
-    # expand back to states...
-    D = np.zeros((n,n))
-    state_to_cls = {s:c for c,sts in eq_classes.items() for s in sts}
-    for u in range(n):
-        for v in range(n):
-            D[u,v] = Dk[state_to_cls[u], state_to_cls[v]]
-
-    return D, eq_classes, Tmin, class_term, Dk
-
 def generate_graphviz_source(T, Term, labels, is_minimized=False):
     """
     Generate a Graphviz DOT source string for a probabilistic transition system (PTS).
@@ -555,8 +494,8 @@ def generate_graphviz_source(T, Term, labels, is_minimized=False):
             if T[i, j] > 0:
                 label = labels.get((i, j), "") if labels else ""
                 if label:
-                    if isinstance(label, list):
-                        label_text = ", ".join(label)
+                    if isinstance(label, (list, set)):
+                        label_text = ", ".join(str(l) for l in label)
                     else:
                         label_text = str(label)
                     dot.edge(f"{prefix} {i+1}", f"{prefix} {j+1}", label=f"{label_text} ({T[i, j]:.2f})")
