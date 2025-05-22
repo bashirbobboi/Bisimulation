@@ -100,7 +100,11 @@ def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", hel
     for x, y in R_n:
         R_mat[x, y] = 1
     equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
+    minimized_T, minimized_labels = compute_minimized_transition_matrix(
+        T,
+        equivalence_classes,
+        labels
+    )
     # Print statistics
     num_classes = len(equivalence_classes)
     compression_ratio = num_classes / n
@@ -144,7 +148,7 @@ def dist(input_file: str):
         None. Prints distance matrix, metrics, and saves heatmap to disk.
     """
     T, Term, labels = load_internal_json(input_file)
-    D = bisimulation_distance_matrix(T, Term)
+    D, equivalence_classes, minimized_T, class_termination, D_classes = bisimulation_distance_matrix(T, Term)
     n = len(D)
     typer.echo("\nDistance Matrix:")
     np.set_printoptions(precision=3, suppress=True)
