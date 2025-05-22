@@ -15,7 +15,7 @@ from probisim.bisimdistance import (
 )
 import pandas as pd
 import time
-from probisim.parsers import parse_model  # <-- NEW IMPORT
+from probisim.parsers import parse_model
 
 # Create necessary directories if they don't exist
 Path("txt").mkdir(exist_ok=True)
@@ -376,7 +376,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
     try:
         # --- Distance computation timing ---
         start_dist = time.time()
-        D = bisimulation_distance_matrix(T, Term)
+        D, equivalence_classes, minimized_T, class_termination = bisimulation_distance_matrix(T, Term)
         end_dist = time.time()
         dist_time = end_dist - start_dist
 
@@ -388,8 +388,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
         R_mat = np.zeros((n, n), dtype=int)
         for i, j in R_n:
             R_mat[i, j] = 1
-        equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
-        minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, state_class_map, labels)
+        minimized_labels = compute_minimized_transition_matrix(T, equivalence_classes, labels)[1]
         end_min = time.time()
         min_time = end_min - start_min
 
@@ -448,7 +447,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                     if state1 != "Select a state..." and state2 != "Select a state...":
                         idx1 = int(state1.split()[1]) - 1
                         idx2 = int(state2.split()[1]) - 1
-                        explanations = analyze_state_differences(idx1, idx2, T, Term, D)
+                        explanations = analyze_state_differences(idx1, idx2, T, Term, D, equivalence_classes, minimized_T, class_termination)
                         st.markdown(f"#### Distance between {state1} and {state2}: {D[idx1, idx2]:.3f}")
                         
                         if idx1 == idx2:
@@ -462,7 +461,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                             st.success(f"These states are bisimilar (identical behavior)! They have:")
                             st.markdown("""
                             - The same termination behavior
-                            - Identical transition probabilities to all states
+                            - Identical transition probabilities to equivalence classes
                             - No behavioral differences
                             """)
                         else:
@@ -521,7 +520,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                     if len(min_pairs) == 1:
                         st.success(f"States S{min_pairs[0][0]+1} and S{min_pairs[0][1]+1} are most similar with distance {min_distance:.3f}")
                         # Add explanation for this pair
-                        explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D)
+                        explanations = analyze_state_differences(min_pairs[0][0], min_pairs[0][1], T, Term, D, equivalence_classes, minimized_T, class_termination)
                     else:
                         st.success(f"Found {len(min_pairs)} pairs of most similar states (distance: {min_distance:.3f})")
                         # Create a table for similar states
@@ -542,7 +541,7 @@ if T is not None and Term is not None and (input_mode == "Upload File" or input_
                     if len(max_pairs) == 1:
                         st.error(f"States S{max_pairs[0][0]+1} and S{max_pairs[0][1]+1} are most different with distance {max_distance:.3f}")
                         # Add explanation for this pair
-                        explanations = analyze_state_differences(max_pairs[0][0], max_pairs[0][1], T, Term, D)
+                        explanations = analyze_state_differences(max_pairs[0][0], max_pairs[0][1], T, Term, D, equivalence_classes, minimized_T, class_termination)
                         st.markdown("##### Why these states differ:")
                         for explanation in explanations[:3]:  # Show only top 3
                             st.write(explanation)
@@ -702,18 +701,18 @@ digraph G {{
   {{
     {chr(10).join([
         f'"{i}" [label="Class {i+1}", ' +
-        ("color=lightblue, peripheries=2" if list(class_termination_status.values())[i] else "color=lightgreen") + "]" for i in range(len(minimized_T))
+        ("color=lightblue, peripheries=2" if list(class_termination.values())[i] else "color=lightgreen") + "]" for i in range(len(minimized_T))
     ])}
   }}
   {chr(10).join([
-      f'"{i}" -> "{j}" [label="{minimized_T[i,j]:.2f}"]' for i in range(len(minimized_T)) for j in range(len(minimized_T)) if minimized_T[i,j] > 0 and not list(class_termination_status.values())[i]
+      f'"{i}" -> "{j}" [label="{minimized_T[i,j]:.2f}"]' for i in range(len(minimized_T)) for j in range(len(minimized_T)) if minimized_T[i,j] > 0 and not list(class_termination.values())[i]
   ])}
 }}
 """
                 else:
                     minimized_graphviz_src = generate_graphviz_source(
                         minimized_T, 
-                        list(class_termination_status.values()), 
+                        list(class_termination.values()), 
                         minimized_labels,
                         is_minimized=True
                     )
@@ -802,10 +801,10 @@ digraph G {{
                     class_info = {
                         'id': class_id + 1,
                         'states': states_str,
-                        'terminating': class_termination_status[class_id]
+                        'terminating': class_termination[class_id]
                     }
                     
-                    if class_termination_status[class_id]:
+                    if class_termination[class_id]:
                         terminating_classes.append(class_info)
                     else:
                         non_terminating_classes.append(class_info)

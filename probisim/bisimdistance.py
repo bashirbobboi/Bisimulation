@@ -1,5 +1,8 @@
 import numpy as np
-
+from scipy.optimize import linprog
+from graphviz import Digraph
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 # --- File parsing and minimization helpers ---
 def input_probabilistic_transition_system(filename=None, use_file=True):
@@ -51,9 +54,23 @@ def input_probabilistic_transition_system(filename=None, use_file=True):
         # Fallback to command-line input (not needed for Streamlit app)
         raise NotImplementedError("Command-line input is not supported in the Streamlit app.")
 
+def build_predecessor_lists(transition_matrix):
+    """
+    Build predecessor lists for each state in the transition matrix.
+    Returns a list where preds[y] contains all states x with T[x,y] > 0.
+    """
+    n = len(transition_matrix)
+    preds = [[] for _ in range(n)]
+    for x in range(n):
+        for y in range(n):
+            if transition_matrix[x, y] > 0:
+                preds[y].append(x)
+    return preds
+
 def refine_relation(R, transition_matrix, terminating_vector):
     """
-    Iteratively refines a candidate relation R on states to the largest bisimulation relation.
+    Efficient partition refinement algorithm for probabilistic bisimulation using Paige-Tarjan style.
+    Properly handles probability masses when splitting blocks.
     Args:
         R: Set of (i, j) pairs representing the current relation.
         transition_matrix: np.ndarray, the transition matrix of the PTS.
@@ -61,26 +78,98 @@ def refine_relation(R, transition_matrix, terminating_vector):
     Returns:
         Set of (i, j) pairs representing the coarsest bisimulation relation.
     """
-    num_states = len(transition_matrix)
-    def transition_prob(x, equivalence_classes):
-        return {class_id: sum(transition_matrix[x, y] for y in equivalence_classes[class_id])
-                for class_id in equivalence_classes}
-    while True:
-        # Partition-refinement loop: repeatedly split relation classes until stable
-        new_R = set()
-        equivalence_classes = {i: {j for j in range(num_states) if (i, j) in R} for i in range(num_states)}
-        for x in range(num_states):
-            for y in range(num_states):
-                if (x, y) in R:
-                    x_trans = transition_prob(x, equivalence_classes)
-                    y_trans = transition_prob(y, equivalence_classes)
-                    if x_trans != y_trans or terminating_vector[x] != terminating_vector[y]:
-                        continue
-                    new_R.add((x, y))
-        if new_R == R:
-            break
-        R = new_R
-    return R
+    n = len(transition_matrix)
+    
+    # Build predecessor lists for efficient lookup
+    preds = build_predecessor_lists(transition_matrix)
+    
+    # Initialize partition: split by termination status
+    blocks = {}
+    state_to_block = {}
+    worklist = []
+    
+    # Create initial blocks based on termination status
+    term_block = set()
+    nonterm_block = set()
+    for i in range(n):
+        if terminating_vector[i]:
+            term_block.add(i)
+            state_to_block[i] = 0
+        else:
+            nonterm_block.add(i)
+            state_to_block[i] = 1
+    
+    blocks[0] = term_block
+    blocks[1] = nonterm_block
+    
+    # Add smaller block to worklist
+    if len(term_block) <= len(nonterm_block):
+        worklist.append(0)
+    else:
+        worklist.append(1)
+    
+    # Main refinement loop
+    while worklist:
+        splitter_id = worklist.pop()
+        splitter = blocks[splitter_id]
+        
+        # For each state in splitter, process its predecessors
+        incoming_states = set()
+        for y in splitter:
+            incoming_states.update(preds[y])
+        
+        # Group incoming states by their current block and probability mass
+        block_to_states = {}
+        for x in incoming_states:
+            # Calculate total probability mass from x into splitter, with rounding for stability
+            eps = 1e-8
+            w_x = sum(transition_matrix[x, y] for y in splitter)
+            # Round to 8 decimal places (integer parameter)
+            w_x = round(w_x, 8)
+            block_id = state_to_block[x]
+            
+            if block_id not in block_to_states:
+                block_to_states[block_id] = {}
+            
+            # Group by probability mass
+            bucket = block_to_states[block_id].setdefault(w_x, set())
+            bucket.add(x)
+        
+        # Split blocks that have states leading into splitter
+        for block_id, mass_groups in block_to_states.items():
+            if len(mass_groups) > 1:  # Only split if there are different probability masses
+                # Snapshot the original block before any splitting
+                original_block = blocks[block_id].copy()
+                
+                # For each probability mass group
+                for mass, states in mass_groups.items():
+                    if len(states) < len(original_block):  # Compare against original block size
+                        # Create new block for this probability mass
+                        new_block = states
+                        old_block = original_block - new_block
+                        
+                        # Update block assignments
+                        blocks[block_id] = old_block
+                        new_block_id = len(blocks)
+                        blocks[new_block_id] = new_block
+                        
+                        for s in new_block:
+                            state_to_block[s] = new_block_id
+                        
+                        # Add smaller block to worklist
+                        if len(old_block) <= len(new_block):
+                            worklist.append(block_id)
+                        else:
+                            worklist.append(new_block_id)
+    
+    # Convert partition back to relation
+    R_new = set()
+    for block_id, states in blocks.items():
+        for x in states:
+            for y in states:
+                R_new.add((x, y))
+    
+    return R_new
 
 def compute_equivalence_classes(R, num_states, terminating_vector):
     """
@@ -143,13 +232,12 @@ def compute_equivalence_classes(R, num_states, terminating_vector):
 
     return equivalence_classes, state_class_map, class_termination_status
 
-def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, state_class_map, transition_labels):
+def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, transition_labels):
     """
-    Compute the minimized transition matrix and labels for the quotient system under bisimulation.
+    Compute the minimized transition matrix and labels based on equivalence classes.
     Args:
         transition_matrix: np.ndarray, original transition matrix.
         equivalence_classes: dict, mapping class_id to set of states.
-        state_class_map: dict, mapping state to class_id.
         transition_labels: dict, original transition labels.
     Returns:
         minimized_T: np.ndarray, minimized transition matrix.
@@ -158,74 +246,235 @@ def compute_minimized_transition_matrix(transition_matrix, equivalence_classes, 
     num_classes = len(equivalence_classes)
     minimized_T = np.zeros((num_classes, num_classes))
     minimized_labels = {}
-    for class_id, class_states in equivalence_classes.items():
-        for x in class_states:
+    
+    # Derive state_class_map from equivalence_classes
+    state_class_map = {s: c for c, states in equivalence_classes.items() for s in states}
+    
+    # Compute transition probabilities between classes
+    for x in range(len(transition_matrix)):
+        if x not in state_class_map:
+            continue
+        source_class = state_class_map[x]
             for y in range(len(transition_matrix)):
-                if transition_matrix[x, y] > 0:
+            if y not in state_class_map:
+                continue
+            target_class = state_class_map[y]
+            minimized_T[source_class, target_class] += transition_matrix[x, y]
+    
+    # Normalize rows to ensure they sum to 1
+    row_sums = minimized_T.sum(axis=1)
+    minimized_T = np.divide(minimized_T, row_sums[:, np.newaxis], where=row_sums[:, np.newaxis] != 0)
+    
+    # Compute minimized labels
+    for (x, y), label in transition_labels.items():
+        if x in state_class_map and y in state_class_map:
+            source_class = state_class_map[x]
                     target_class = state_class_map[y]
-                    # We average over all states in the class to preserve stochasticity in the quotient system
-                    minimized_T[class_id, target_class] += transition_matrix[x, y] / len(class_states)
-                    if (x, y) in transition_labels:
-                        action = transition_labels[(x, y)]
-                        if (class_id, target_class) not in minimized_labels:
-                            minimized_labels[(class_id, target_class)] = []
-                        if action not in minimized_labels[(class_id, target_class)]:
-                            minimized_labels[(class_id, target_class)].append(action)
+            if (source_class, target_class) not in minimized_labels:
+                minimized_labels[(source_class, target_class)] = set()
+            minimized_labels[(source_class, target_class)].add(label)
+    
     return minimized_T, minimized_labels
 
-# --- Bisimulation distance and visualization helpers ---
-from scipy.optimize import linprog
-from graphviz import Digraph
-import matplotlib.pyplot as plt
-import seaborn as sns
+def analyze_state_differences(idx1, idx2, T, Term, D_prev, equivalence_classes, minimized_T, class_termination):
+    """
+    Provides a human-readable explanation of why two states differ in behavior, based on their bisimulation distance and transition structure.
+    Uses the minimized system to analyze differences between equivalence classes.
+    Args:
+        idx1: int, index of the first state.
+        idx2: int, index of the second state.
+        T: np.ndarray, transition matrix.
+        Term: np.ndarray, termination vector.
+        D_prev: np.ndarray, precomputed distance matrix.
+        equivalence_classes: dict, mapping class_id to set of states.
+        minimized_T: np.ndarray, minimized transition matrix.
+        class_termination: dict, mapping class_id to termination status.
+    Returns:
+        List of strings explaining the main sources of difference between the two states.
+    """
+    # Get the equivalence classes for the states we're comparing
+    state_class_map = {s: c for c, states in equivalence_classes.items() for s in states}
+    class1 = state_class_map[idx1]
+    class2 = state_class_map[idx2]
+    
+    explanations = []
+    
+    # 1) Termination
+    if Term[idx1] != Term[idx2]:
+        explanations.append(
+            f"Termination mismatch: State {idx1+1} is "
+            f"{'terminating' if Term[idx1] else 'non-terminating'}, "
+            f"while State {idx2+1} is "
+            f"{'terminating' if Term[idx2] else 'non-terminating'}."
+        )
+
+    # 2) If same termination status, do the LP coupling on minimized system
+    if Term[idx1] == Term[idx2]:
+        # Compute distance between the two classes we're interested in
+        num_classes = len(equivalence_classes)
+        print(f"Debug: num_classes = {num_classes}")
+        print(f"Debug: D_prev shape = {D_prev.shape}")
+        
+        # Create cost matrix for just the two classes we're comparing
+        c = np.zeros((num_classes, num_classes))
+        for i in range(num_classes):
+            for j in range(num_classes):
+                c[i, j] = D_prev[i, j]
+        c = c.flatten()
+        print(f"Debug: c shape after flatten = {c.shape}")
+        
+        A_eq = []
+        b_eq = []
+        
+        # Row constraints for class1
+        for k in range(num_classes):
+            row = np.zeros((num_classes, num_classes))
+            row[k, :] = 1
+            A_eq.append(row.flatten())
+            b_eq.append(minimized_T[class1, k])
+        
+        # Column constraints for class2
+        for l in range(num_classes):
+            col = np.zeros((num_classes, num_classes))
+            col[:, l] = 1
+            A_eq.append(col.flatten())
+            b_eq.append(minimized_T[class2, l])
+        
+        # Convert to numpy arrays and ensure correct shapes
+        A_eq = np.array(A_eq)
+        b_eq = np.array(b_eq)
+        
+        print(f"Debug: A_eq shape = {A_eq.shape}")
+        print(f"Debug: c length = {len(c)}")
+        
+        # Verify dimensions match
+        if len(c) != A_eq.shape[1]:
+            raise ValueError(f"Dimension mismatch: c length ({len(c)}) != A_eq columns ({A_eq.shape[1]})")
+        
+        # Set up bounds for the LP variables
+        bounds = [(0, None)] * len(c)
+        
+        # Solve the LP
+        res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
+        if res.success:
+            dist = res.fun
+            coupling = res.x.reshape((num_classes, num_classes))
+            
+            # Analyze the coupling to explain differences
+            moves = []
+            for i in range(num_classes):
+                for j in range(num_classes):
+                    flow = coupling[i,j]
+                    if flow > 1e-8 and D_prev[i,j] > 0:
+                        contrib = flow * D_prev[i,j]
+                        if contrib > 1e-3:   # filter out tiny ones
+                            # Get representative states from each class
+                            rep_i = next(iter(equivalence_classes[i]))
+                            rep_j = next(iter(equivalence_classes[j]))
+                            moves.append((rep_i, rep_j, minimized_T[class1,i], minimized_T[class2,j], contrib))
+            
+            # Sort by contribution and show top 3
+            moves.sort(key=lambda x: x[4], reverse=True)
+            for i, j, p1, p2, contrib in moves[:3]:
+                explanations.append(
+                    f"Transition from State {idx1+1} to State {i+1} "
+                    f"(probability = {p1:.2f}) vs From State {idx2+1} to State {j+1} "
+                    f"(probability = {p2:.2f}) → this contributes {contrib:.3f} to their distance"
+                )
+            if len(moves) > 3:
+                explanations.append("Note: Only the top 3 contributing transitions are shown here for clarity.")
+    
+    return explanations
 
 def bisimulation_distance_matrix(T, Term, tol=1e-6, max_iter=100):
     """
     Compute the bisimulation distance matrix via iterative LP solves (Wasserstein metric).
+    First minimizes the system, then computes distances between equivalence classes.
     Args:
         T: np.ndarray, transition matrix.
         Term: np.ndarray, termination vector.
         tol: float, convergence tolerance.
         max_iter: int, maximum number of iterations.
     Returns:
-        D: np.ndarray, bisimulation distance matrix.
+        D: np.ndarray, bisimulation distance matrix for the original system.
     """
     n = len(T)
-    D = np.zeros((n, n))
-    for i in range(n):
-        for j in range(n):
-            if Term[i] != Term[j]:
-                D[i, j] = 1.0
-    # Iteratively update D using the previous distance matrix as the cost for the Wasserstein LP
-    # This converges to the greatest fixed point (bisimulation metric)
+    
+    # First, compute the minimized system
+    R = refine_relation(set((i,i) for i in range(n)), T, Term)
+    R_matrix = np.zeros((n, n), dtype=int)
+    for i, j in R:
+        R_matrix[i, j] = 1
+    
+    equivalence_classes, _, class_termination = compute_equivalence_classes(R_matrix, n, Term)
+    minimized_T, _ = compute_minimized_transition_matrix(T, equivalence_classes, {})
+    
+    # Compute distances between equivalence classes
+    num_classes = len(equivalence_classes)
+    D_minimized = np.zeros((num_classes, num_classes))
+    
+    # Initialize distances based on termination
+    for i in range(num_classes):
+        for j in range(num_classes):
+            if class_termination[i] != class_termination[j]:
+                D_minimized[i, j] = 1.0
+    
+    # Iteratively update distances using the minimized system
     for iteration in range(max_iter):
-        D_prev = D.copy()
-        for i in range(n):
-            for j in range(n):
-                if Term[i] != Term[j]:
+        D_prev = D_minimized.copy()
+        for i in range(num_classes):
+            for j in range(num_classes):
+                if class_termination[i] != class_termination[j]:
                     continue
+                
+                # Set up the LP for the minimized system
                 c = D_prev.flatten()
                 A_eq = []
                 b_eq = []
-                for k in range(n):
-                    row = np.zeros((n, n))
+                
+                # Row constraints for class i
+                for k in range(num_classes):
+                    row = np.zeros((num_classes, num_classes))
                     row[k, :] = 1
                     A_eq.append(row.flatten())
-                    b_eq.append(T[i, k])
-                for l in range(n):
-                    col = np.zeros((n, n))
+                    b_eq.append(minimized_T[i, k])
+                
+                # Column constraints for class j
+                for l in range(num_classes):
+                    col = np.zeros((num_classes, num_classes))
                     col[:, l] = 1
                     A_eq.append(col.flatten())
-                    b_eq.append(T[j, l])
-                bounds = [(0, None)] * (n * n)
+                    b_eq.append(minimized_T[j, l])
+                
+                # Convert to numpy arrays and ensure correct shapes
+                A_eq = np.array(A_eq)
+                b_eq = np.array(b_eq)
+                
+                # Reshape c to match A_eq if needed
+                if len(c) != A_eq.shape[1]:
+                    c = c.reshape(-1)
+                
+                # Set up bounds for the LP variables
+                bounds = [(0, None)] * len(c)
+                
+                # Solve the LP
                 res = linprog(c, A_eq=A_eq, b_eq=b_eq, bounds=bounds, method="highs")
                 if res.success:
-                    D[i, j] = res.fun
+                    D_minimized[i, j] = res.fun
                 else:
-                    D[i, j] = 1.0
-        if np.max(np.abs(D - D_prev)) < tol:
+                    D_minimized[i, j] = 1.0
+                    
+        if np.max(np.abs(D_minimized - D_prev)) < tol:
             break
-    return D
+    
+    # Map minimized distances back to original system
+    D = np.zeros((n, n))
+    state_class_map = {s: c for c, states in equivalence_classes.items() for s in states}
+    for i in range(n):
+        for j in range(n):
+            D[i, j] = D_minimized[state_class_map[i], state_class_map[j]]
+    
+    return D, equivalence_classes, minimized_T, class_termination
 
 def generate_graphviz_source(T, Term, labels, is_minimized=False):
     """
@@ -311,51 +560,4 @@ def wasserstein_distance(p, q, C):
         return res.fun, coupling
     else:
         raise ValueError("Wasserstein LP did not converge: " + res.message)
-
-def analyze_state_differences(idx1, idx2, T, Term, D_prev):
-    """
-    Provides a human-readable explanation of why two states differ in behavior, based on their bisimulation distance and transition structure.
-    Args:
-        idx1: int, index of the first state.
-        idx2: int, index of the second state.
-        T: np.ndarray, transition matrix.
-        Term: np.ndarray, termination vector.
-        D_prev: np.ndarray, precomputed distance matrix.
-    Returns:
-        List of strings explaining the main sources of difference between the two states.
-    """
-    explanations = []
-    # 1) Termination
-    if Term[idx1] != Term[idx2]:
-        explanations.append(
-            f"Termination mismatch: State {idx1+1} is "
-            f"{'terminating' if Term[idx1] else 'non-terminating'}, "
-            f"while State {idx2+1} is "
-            f"{'terminating' if Term[idx2] else 'non-terminating'}."
-        )
-
-    # 2) If same termination status, do the LP coupling
-    if Term[idx1] == Term[idx2]:
-        dist, coupling = wasserstein_distance(T[idx1], T[idx2], D_prev)
-        moves = []
-        n = len(T)
-        for i in range(n):
-            for j in range(n):
-                flow = coupling[i,j]
-                if flow > 1e-8 and D_prev[i,j] > 0:
-                    contrib = flow * D_prev[i,j]
-                    if contrib > 1e-3:   # filter out tiny ones
-                        moves.append((i, j, T[idx1,i], T[idx2,j], contrib))
-        # top 3
-        moves.sort(key=lambda x: x[4], reverse=True)
-        for i, j, p1, p2, contrib in moves[:3]:
-            explanations.append(
-                f"Transition from State {idx1+1} to State {i+1} "
-                f"(probability = {p1:.2f}) vs From State {idx2+1} to State {j+1} "
-                f"(probability = {p2:.2f}) → this contributes {contrib:.3f} to their distance"
-            )
-        # Only show the top 3 contributions for clarity, as there may be many small ones
-        if len(moves) > 3:
-            explanations.append("Note: Only the top 3 contributing transitions are shown here for clarity.")
-    return explanations
 
