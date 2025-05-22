@@ -56,9 +56,8 @@ def test_compute_minimized_transition_matrix_full_relation():
     # When both states are equivalent, minimized matrix is 1x1 with probability 1
     T = np.array([[0.5, 0.5], [0.5, 0.5]])
     eq_classes = {0: {0, 1}}
-    state_map = {0: 0, 1: 0}
     minimized_T, minimized_labels = compute_minimized_transition_matrix(
-        T, eq_classes, state_map, transition_labels={}
+        T, eq_classes, transition_labels={}
     )
     assert minimized_T.shape == (1, 1)
     assert pytest.approx(minimized_T[0, 0], rel=1e-6) == 1.0
@@ -99,7 +98,7 @@ def test_full_minimization_chain_example():
 
     # Test minimized transition matrix
     minimized_T, minimized_labels = compute_minimized_transition_matrix(
-        T, classes, state_map, transition_labels={}
+        T, classes, transition_labels={}
     )
     assert minimized_T.shape == (2, 2)
     # Class containing {1,2} should have a self-loop probability of 1
@@ -118,11 +117,10 @@ def test_label_propagation_single_class():
     ])
     # All states in same class
     equiv = {0: {0, 1, 2}}
-    state_map = {0: 0, 1: 0, 2: 0}
     # Labels on transitions from 0->2 and 1->2
     labels = {(0, 2): 'a', (1, 2): 'b'}
 
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, state_map, labels)
+    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, labels)
     # Only one class so shape is (1,1) and since each original state self-loop prob
     # Minimized_T[0,0] = sum of all transitions / |class| = (1+1+1)/3 = 1.0
     assert minimized_T.shape == (1,1)
@@ -142,17 +140,16 @@ def test_label_deduplication():
     ])
     # Classes: state0 and state1 separate
     equiv = {0: {0}, 1: {1}}
-    state_map = {0: 0, 1: 1}
     # Labels: both transitions from state0->0 and state1->0 have same label 'x'
     labels = {(0, 0): 'x', (1, 0): 'x'}
 
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, state_map, labels)
+    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, labels)
     # minimized_labels should have entries for (0,0) and (1,0)
     assert (0,0) in minimized_labels
     assert (1,0) in minimized_labels
-    # Each list should contain only one 'x'
-    assert minimized_labels[(0,0)] == ['x']
-    assert minimized_labels[(1,0)] == ['x']
+    # Each set should contain only one 'x'
+    assert minimized_labels[(0,0)] == {'x'}
+    assert minimized_labels[(1,0)] == {'x'}
 
 
 def test_no_labels_leads_to_empty_dict():
@@ -160,8 +157,7 @@ def test_no_labels_leads_to_empty_dict():
     # No transitions_labels provided
     T = np.array([[1.0]])
     equiv = {0: {0}}
-    state_map = {0: 0}
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, state_map, {})
+    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, {})
     assert minimized_T.shape == (1,1)
     assert minimized_labels == {}
 

@@ -142,7 +142,7 @@ A comprehensive test suite is provided to ensure correctness, robustness, and re
      ```
   2. Run the test suite:
      ```bash
-     pytest --cov=probisim --cov-report=term-missing
+     pytest --cov=. --cov-report=term-missing
      ```
      This will show a coverage report in the terminal.
 

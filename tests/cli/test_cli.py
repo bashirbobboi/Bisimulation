@@ -19,6 +19,19 @@ def make_prism_model(tmp_path):
     )
     return str(pm)
 
+def make_txt_model(tmp_path):
+    """Helper to create a simple legacy txt model file for testing."""
+    txt = tmp_path / "model.txt"
+    txt.write_text(
+        """
+2
+0.0 1.0
+1.0 0.0
+0
+1
+"""
+    )
+    return str(txt)
 
 def test_parse_writes_internal_json(tmp_path):
     """Test that the CLI 'parse' command writes a valid internal JSON file."""

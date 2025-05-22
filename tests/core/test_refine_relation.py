@@ -57,13 +57,13 @@ def test_refine_relation_iterative_refinement():
     assert R == expected
 
 def test_refine_relation_empty_relation():
-    """Test that starting with an empty relation returns empty immediately."""
-    # If starting with empty R, should return empty immediately
+    """Test that starting with an empty relation returns only reflexive pairs."""
+    # If starting with empty R, should return only reflexive pairs
     T = np.array([[1.0]])
     Term = np.array([0], dtype=int)
     R0 = set()
     R = refine_relation(R0, T, Term)
-    assert R == set()
+    assert R == {(0, 0)}
 
 if __name__ == "__main__":
     pytest.main()
