@@ -1008,7 +1008,7 @@ digraph G {{
                 max_steps = st.number_input(
                     "Maximum Steps",
                     min_value=1,
-                    max_value=15,
+                    max_value=101,
                     value=100,
                     help="Maximum number of steps before stopping the simulation"
                 )
