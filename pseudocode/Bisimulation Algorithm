@@ -1,15 +1,20 @@
 # Algorithm for Bisimulation
 Input: 
-  - Transition matrix T representing the Markov chain
+  - Transition matrix T representing the Probabilistic Transition System
   - Set of states X (state space)
+  - Termination vector Term (indicates which states are terminating)
+  - (Optional) Transition labels
 
 Output:
   - Minimized transition matrix T_min
   - Equivalence classes of states (modulo probabilistic bisimulation)
+  - (Optional) Minimized transition labels
+  - Termination status for each equivalence class
 
 Algorithm:
 1. Initialize:
    - Let R_0 = X × X (all pairs of states are initially considered equivalent).
+   - Partition states by termination status: only states with the same status can be equivalent.
    - Set n = 0.
 
 2. Define the refinement function f:
@@ -28,14 +33,18 @@ Algorithm:
 
 4. Construct equivalence classes:
    - Group states x and y into the same equivalence class if (x, y) ∈ R_n.
+   - Each class contains only states with the same termination status.
 
-5. Compute the minimized transition matrix:
+5. Compute the minimized transition matrix and labels:
    - For each equivalence class [C]:
      a. Compute transitions between equivalence classes:
         - T_min([C1], [C2]) = ∑_{x ∈ C1, y ∈ C2} T(x, y) / |C1|.
+     b. (Optional) For each class-to-class transition, collect the set of labels from the original transitions.
 
 6. Return the minimized system:
    - Minimized transition matrix T_min.
    - Equivalence classes.
+   - (Optional) Minimized transition labels.
+   - Termination status for each class.
 
 
