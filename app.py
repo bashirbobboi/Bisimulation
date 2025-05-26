@@ -324,8 +324,17 @@ elif input_mode == "Manual Input":
     n = st.sidebar.number_input("Number of states", 2, 15, 2)
     matrix = []
     valid = True
+    # Generate dynamic placeholder for transition input
+    example_probs = [round(1.0/n, 2) for _ in range(n)]
+    # Adjust last value to ensure sum is exactly 1.0
+    example_probs[-1] = round(1.0 - sum(example_probs[:-1]), 2)
+    example_placeholder = " ".join(str(p) for p in example_probs)
     for i in range(n):
-        row = st.sidebar.text_input(f"State {i+1} transitions", key=f"row_{i}")
+        row = st.sidebar.text_input(
+            f"State {i+1} transitions",
+            key=f"row_{i}",
+            placeholder=example_placeholder
+        )
         # parse & validate...
         try:
             vals = list(map(float, row.split()))
@@ -349,7 +358,11 @@ elif input_mode == "Manual Input":
             for i in range(n):
                 for j in range(n):
                     if matrix[i][j]>0:
-                        lab = st.text_input(f"S{i+1}→S{j+1}", key=f"lab_{i}_{j}")
+                        lab = st.text_input(
+                            f"S{i+1}→S{j+1}",
+                            key=f"lab_{i}_{j}",
+                            placeholder="Optional: label for this transition (e.g. 'a', 'move', etc.)"
+                        )
                         if lab: labels[(i,j)] = lab
 
             create = st.form_submit_button("Create System")

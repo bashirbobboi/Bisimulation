@@ -1,0 +1,45 @@
+# Algorithm: Simulate Random Runs in a Probabilistic Transition System
+
+Input:
+    - Transition matrix T (where T[x][·] gives the probability distribution from state x)
+    - Termination vector Term (Term[x] = 1 if state x is terminating, else 0)
+    - Initial state s₀
+    - Number of simulations N
+    - Maximum steps per run M
+
+Output:
+    - List of run sequences (each a list of visited states)
+    - Statistics: average steps to termination, termination rate, max steps reached
+
+Algorithm:
+1. Initialize:
+    - all_runs ← empty list  # Stores all simulation runs
+    - steps_to_termination ← empty list  # Steps taken in each run
+    - termination_count ← 0  # Number of runs that reached a terminating state
+    - max_steps_reached ← 0  # Longest run in terms of steps
+
+2. For sim = 1 to N do:
+    a. run ← [s₀]  # Start each run from the initial state
+    b. steps ← 0
+    c. state ← s₀
+
+    d. While steps < M:
+        i.   If Term[state] == 1:
+                 break   # Stop if a terminating state is reached
+        ii.  Sample next_state according to T[state][·] (probabilistic choice)
+        iii. run.append(next_state)
+        iv.  state ← next_state
+        v.   steps ← steps + 1
+
+    e. all_runs.append(run)
+    f. steps_to_termination.append(steps)
+    g. If Term[state] == 1:
+           termination_count ← termination_count + 1  # Count successful terminations
+    h. If steps > max_steps_reached:
+           max_steps_reached ← steps  # Track the longest run
+
+3. Compute statistics:
+    - avg_steps ← mean(steps_to_termination)
+    - termination_rate ← termination_count / N
+
+4. Return all_runs, avg_steps, termination_rate, max_steps_reached 

@@ -1,37 +1,19 @@
-8
-# Transition matrix (8×8 rows must each sum to 1)
-0.5 0.5 0   0   0   0   0   0
-0   0.5 0.5 0   0   0   0   0
-0   0   0.5 0.5 0   0   0   0
-0   0   0   0   0.5 0.5 0   0
-0   0   0   0   1   0   0   0
-0   0   0   0   0   1   0   0
-0.3 0   0   0.7 0   0   0   0
-0   0   0   0   0.4 0.4 0   0.2
+# Number of states
+3
 
-# Terminating-state flags (1=terminating, 0=non–terminating)
-0
-0
+# Transition matrix (each row space-separated)
+0.5 0.5 0.0
+0.0 0.5 0.5
+0.0 0.0 1.0
+
+# Terminating states (one per line)
 0
 0
 1
-1
-0
-0
 
-# Transition labels (from state to state label)
+# Transition labels (each line: FROM TO LABEL)
 1 1 loop
-1 2 a
+1 2 move
 2 2 loop
-2 3 a
-3 3 loop3
-3 4 c
-4 5 x
-4 6 y
-5 5 stop
-6 6 stop
-7 1 d
-7 4 e
-8 5 x
-8 6 y
-8 8 g
+2 3 exit
+3 3 exit
