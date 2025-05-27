@@ -8,7 +8,7 @@
 
 # Terminating states (one per line)
 0
-0
+1
 1
 
 # Transition labels (each line: FROM TO LABEL)
