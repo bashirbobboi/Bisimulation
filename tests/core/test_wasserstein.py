@@ -2,6 +2,7 @@
 Unit tests for wasserstein_distance (optimal transport/Wasserstein metric).
 Covers identical distributions, simple cases, rectangular cases, and infeasibility.
 """
+
 import numpy as np
 import pytest
 
@@ -43,7 +44,7 @@ def test_rectangular_distributions_conservation():
     """Test rectangular distributions and conservation of mass in coupling."""
     # Rectangular case: p length 2, q length 3
     p = np.array([0.5, 0.5])
-    q = np.array([1/3, 1/3, 1/3])
+    q = np.array([1 / 3, 1 / 3, 1 / 3])
     # Cost matrix of increasing costs
     C = np.array([[0.0, 1.0, 2.0], [2.0, 1.0, 0.0]])
     dist, coupling = wasserstein_distance(p, q, C)

@@ -5,6 +5,7 @@ Smoke test for the Streamlit app: verifies that the app imports and runs without
 import pytest
 import streamlit as st
 
+
 def test_app_imports_and_runs(monkeypatch):
     """Test that the Streamlit app can be imported and run without exceptions."""
     # Prevent Streamlit from opening a browser or gathering usage stats
@@ -13,4 +14,5 @@ def test_app_imports_and_runs(monkeypatch):
     monkeypatch.setattr(st, "run", lambda *args, **kwargs: None, raising=False)
     # Import the app; if this succeeds, the test passes
     import app
+
     # If that succeeds with no exceptions, you've got a passing smoke test.

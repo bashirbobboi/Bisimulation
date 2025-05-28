@@ -2,13 +2,14 @@
 Unit tests for minimization and equivalence class computation in bisimulation.
 Covers relation refinement, class computation, and minimized matrix/label logic.
 """
+
 import numpy as np
 import pytest
 
 from probisim.bisimdistance import (
     refine_relation,
     compute_equivalence_classes,
-    compute_minimized_transition_matrix
+    compute_minimized_transition_matrix,
 )
 
 
@@ -67,11 +68,7 @@ def test_compute_minimized_transition_matrix_full_relation():
 def test_full_minimization_chain_example():
     """Test full minimization on a 3-state chain where two states are bisimilar."""
     # Three-state chain where states 2 and 3 are bisimilar
-    T = np.array([
-        [1.0, 0.0, 0.0],
-        [0.0, 0.5, 0.5],
-        [0.0, 0.5, 0.5]
-    ])
+    T = np.array([[1.0, 0.0, 0.0], [0.0, 0.5, 0.5], [0.0, 0.5, 0.5]])
     Term = np.array([1, 0, 0], dtype=int)
     R0 = make_full_relation(3)
 
@@ -110,46 +107,54 @@ def test_full_minimization_chain_example():
 def test_label_propagation_single_class():
     """Test that labels are combined correctly when all states are in one class."""
     # Two original states (0,1) in one class, both transition to state 2 with different labels
-    T = np.array([
-        [0.0, 0.0, 1.0],  # state 0
-        [0.0, 0.0, 1.0],  # state 1
-        [0.0, 0.0, 1.0],  # state 2 (self-loop)
-    ])
+    T = np.array(
+        [
+            [0.0, 0.0, 1.0],  # state 0
+            [0.0, 0.0, 1.0],  # state 1
+            [0.0, 0.0, 1.0],  # state 2 (self-loop)
+        ]
+    )
     # All states in same class
     equiv = {0: {0, 1, 2}}
     # Labels on transitions from 0->2 and 1->2
-    labels = {(0, 2): 'a', (1, 2): 'b'}
+    labels = {(0, 2): "a", (1, 2): "b"}
 
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, labels)
+    minimized_T, minimized_labels = compute_minimized_transition_matrix(
+        T, equiv, labels
+    )
     # Only one class so shape is (1,1) and since each original state self-loop prob
     # Minimized_T[0,0] = sum of all transitions / |class| = (1+1+1)/3 = 1.0
-    assert minimized_T.shape == (1,1)
-    assert pytest.approx(minimized_T[0,0], rel=1e-6) == 1.0
+    assert minimized_T.shape == (1, 1)
+    assert pytest.approx(minimized_T[0, 0], rel=1e-6) == 1.0
     # Labels should combine 'a' and 'b'
-    assert (0,0) in minimized_labels
-    merged = minimized_labels[(0,0)]
-    assert set(merged) == {'a','b'}
+    assert (0, 0) in minimized_labels
+    merged = minimized_labels[(0, 0)]
+    assert set(merged) == {"a", "b"}
 
 
 def test_label_deduplication():
     """Test that duplicate labels are deduplicated in the minimized label output."""
     # Two states with same label on transitions to different targets but same class
-    T = np.array([
-        [0.5, 0.5],  # state 0 transitions to 0 and 1
-        [1.0, 0.0],  # state 1 self-loop
-    ])
+    T = np.array(
+        [
+            [0.5, 0.5],  # state 0 transitions to 0 and 1
+            [1.0, 0.0],  # state 1 self-loop
+        ]
+    )
     # Classes: state0 and state1 separate
     equiv = {0: {0}, 1: {1}}
     # Labels: both transitions from state0->0 and state1->0 have same label 'x'
-    labels = {(0, 0): 'x', (1, 0): 'x'}
+    labels = {(0, 0): "x", (1, 0): "x"}
 
-    minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, labels)
+    minimized_T, minimized_labels = compute_minimized_transition_matrix(
+        T, equiv, labels
+    )
     # minimized_labels should have entries for (0,0) and (1,0)
-    assert (0,0) in minimized_labels
-    assert (1,0) in minimized_labels
+    assert (0, 0) in minimized_labels
+    assert (1, 0) in minimized_labels
     # Each set should contain only one 'x'
-    assert minimized_labels[(0,0)] == {'x'}
-    assert minimized_labels[(1,0)] == {'x'}
+    assert minimized_labels[(0, 0)] == {"x"}
+    assert minimized_labels[(1, 0)] == {"x"}
 
 
 def test_no_labels_leads_to_empty_dict():
@@ -158,7 +163,5 @@ def test_no_labels_leads_to_empty_dict():
     T = np.array([[1.0]])
     equiv = {0: {0}}
     minimized_T, minimized_labels = compute_minimized_transition_matrix(T, equiv, {})
-    assert minimized_T.shape == (1,1)
+    assert minimized_T.shape == (1, 1)
     assert minimized_labels == {}
-
-

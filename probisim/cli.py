@@ -15,10 +15,11 @@ from probisim.bisimdistance import (
     compute_minimized_transition_matrix,
     generate_graphviz_source,
     input_probabilistic_transition_system,
-    analyze_state_differences
+    analyze_state_differences,
 )
 
 app = typer.Typer()
+
 
 def save_internal_json(T, Term, labels, filename):
     """
@@ -32,12 +33,13 @@ def save_internal_json(T, Term, labels, filename):
         None
     """
     data = {
-        'T': T.tolist(),
-        'Term': Term.tolist(),
-        'labels': {f"{i},{j}": v for (i, j), v in labels.items()}
+        "T": T.tolist(),
+        "Term": Term.tolist(),
+        "labels": {f"{i},{j}": v for (i, j), v in labels.items()},
     }
-    with open(filename, 'w') as f:
+    with open(filename, "w") as f:
         json.dump(data, f)
+
 
 def load_internal_json(filename):
     """
@@ -49,15 +51,20 @@ def load_internal_json(filename):
         Term: np.ndarray, termination vector.
         labels: dict, transition labels.
     """
-    with open(filename, 'r') as f:
+    with open(filename, "r") as f:
         data = json.load(f)
-    T = np.array(data['T'])
-    Term = np.array(data['Term'])
-    labels = {tuple(map(int, k.split(','))): v for k, v in data['labels'].items()}
+    T = np.array(data["T"])
+    Term = np.array(data["Term"])
+    labels = {tuple(map(int, k.split(","))): v for k, v in data["labels"].items()}
     return T, Term, labels
 
+
 @app.command()
-def parse(input_file: str, fmt: str = typer.Argument(..., help="Model format: prism or json"), to: str = typer.Option(..., help="Output file (internal JSON format)")):
+def parse(
+    input_file: str,
+    fmt: str = typer.Argument(..., help="Model format: prism or json"),
+    to: str = typer.Option(..., help="Output file (internal JSON format)"),
+):
     """
     Parse a model file and save as internal JSON.
 
@@ -71,16 +78,24 @@ def parse(input_file: str, fmt: str = typer.Argument(..., help="Model format: pr
         ValueError: If the model format is unknown or parsing fails.
     """
     if fmt == "txt":
-        T, Term, labels = input_probabilistic_transition_system(filename=input_file, use_file=True)
+        T, Term, labels = input_probabilistic_transition_system(
+            filename=input_file, use_file=True
+        )
     else:
-        with open(input_file, 'r') as f:
+        with open(input_file, "r") as f:
             content = f.read()
         T, Term, labels = parse_model(content, fmt)
     save_internal_json(T, Term, labels, to)
     typer.echo(f"Parsed {input_file} as {fmt} and saved to {to}")
 
+
 @app.command()
-def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", help="Run minimization and show statistics")):
+def bisim(
+    input_file: str,
+    minimize: bool = typer.Option(
+        True, "--minimize", help="Run minimization and show statistics"
+    ),
+):
     """
     Run bisimulation minimization and print statistics.
 
@@ -99,11 +114,11 @@ def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", hel
     R_mat = np.zeros((n, n), dtype=int)
     for x, y in R_n:
         R_mat[x, y] = 1
-    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
+    equivalence_classes, state_class_map, class_termination_status = (
+        compute_equivalence_classes(R_mat, n, Term)
+    )
     minimized_T, minimized_labels = compute_minimized_transition_matrix(
-        T,
-        equivalence_classes,
-        labels
+        T, equivalence_classes, labels
     )
     # Print statistics
     num_classes = len(equivalence_classes)
@@ -116,16 +131,27 @@ def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", hel
     typer.echo(f"\n📊 Bisimulation Statistics:")
     typer.echo(f"  Number of Equivalence Classes: {num_classes}")
     typer.echo(f"  Compression Ratio: {compression_ratio:.2%}")
-    typer.echo(f"  Class Sizes: min={min_size}, max={max_size}, mean={mean_size:.2f}, median={median_size}")
+    typer.echo(
+        f"  Class Sizes: min={min_size}, max={max_size}, mean={mean_size:.2f}, median={median_size}"
+    )
     typer.echo(f"\nEquivalence Classes:")
     for class_id, class_states in equivalence_classes.items():
-        term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
-        typer.echo(f"  Class {class_id}: {sorted([s+1 for s in class_states])} ({term})")
+        term = (
+            "Terminating" if class_termination_status[class_id] else "Non-Terminating"
+        )
+        typer.echo(
+            f"  Class {class_id}: {sorted([s+1 for s in class_states])} ({term})"
+        )
     typer.echo(f"\nMinimized Transition Matrix:")
     np.set_printoptions(precision=3, suppress=True)
     typer.echo(str(minimized_T))
     # Save minimized PTS visualization
-    minimized_dot = generate_graphviz_source(minimized_T, list(class_termination_status.values()), minimized_labels, is_minimized=True)
+    minimized_dot = generate_graphviz_source(
+        minimized_T,
+        list(class_termination_status.values()),
+        minimized_labels,
+        is_minimized=True,
+    )
     minimized_src = Source(minimized_dot)
     minimized_src.format = "png"
     minimized_src.render("minimized_PTS", cleanup=True)
@@ -136,6 +162,7 @@ def bisim(input_file: str, minimize: bool = typer.Option(True, "--minimize", hel
     orig_src.format = "png"
     orig_src.render("original_PTS", cleanup=True)
     typer.echo("Original PTS image saved to original_PTS.png")
+
 
 @app.command()
 def dist(input_file: str):
@@ -148,17 +175,24 @@ def dist(input_file: str):
         None. Prints distance matrix, metrics, and saves heatmap to disk.
     """
     T, Term, labels = load_internal_json(input_file)
-    D, equivalence_classes, minimized_T, class_termination, D_classes = bisimulation_distance_matrix(T, Term)
+    D, equivalence_classes, minimized_T, class_termination, D_classes = (
+        bisimulation_distance_matrix(T, Term)
+    )
     n = len(D)
     typer.echo("\nDistance Matrix:")
     np.set_printoptions(precision=3, suppress=True)
     typer.echo(str(D))
     # Save heatmap
     fig, ax = plt.subplots(figsize=(6, 4))
-    sns.heatmap(D, annot=True, cmap="YlOrRd", fmt=".3f",
-                xticklabels=[f"S{i+1}" for i in range(n)],
-                yticklabels=[f"S{i+1}" for i in range(n)],
-                annot_kws={"size": 8})
+    sns.heatmap(
+        D,
+        annot=True,
+        cmap="YlOrRd",
+        fmt=".3f",
+        xticklabels=[f"S{i+1}" for i in range(n)],
+        yticklabels=[f"S{i+1}" for i in range(n)],
+        annot_kws={"size": 8},
+    )
     ax.set_title("Bisimulation Distance Heatmap", pad=8, size=12)
     plt.tight_layout()
     plt.savefig("distance_heatmap.png")
@@ -170,7 +204,7 @@ def dist(input_file: str):
     mean_dist = np.mean(D_flat)
     median_dist = np.median(D_flat)
     std_dist = np.std(D_flat)
-    total_pairs = n * (n-1) / 2
+    total_pairs = n * (n - 1) / 2
     zero_pairs = np.sum(D_flat == 0)
     zero_prop = zero_pairs / total_pairs
     typer.echo("\nDistance Metrics:")
@@ -204,8 +238,13 @@ def dist(input_file: str):
     for s1, s2 in max_pairs:
         typer.echo(f"  S{s1+1} and S{s2+1}")
 
+
 @app.command()
-def explain(input_file: str, state1: int = typer.Argument(...), state2: int = typer.Argument(...)):
+def explain(
+    input_file: str,
+    state1: int = typer.Argument(...),
+    state2: int = typer.Argument(...),
+):
     """
     Explain why two states are similar or different.
 
@@ -217,12 +256,24 @@ def explain(input_file: str, state1: int = typer.Argument(...), state2: int = ty
         None. Prints explanation to stdout.
     """
     T, Term, labels = load_internal_json(input_file)
-    D, equivalence_classes, minimized_T, class_termination, D_classes = bisimulation_distance_matrix(T, Term)
+    D, equivalence_classes, minimized_T, class_termination, D_classes = (
+        bisimulation_distance_matrix(T, Term)
+    )
     idx1, idx2 = state1 - 1, state2 - 1
-    explanations = analyze_state_differences(idx1, idx2, T, Term, D_classes, equivalence_classes, minimized_T, class_termination)
+    explanations = analyze_state_differences(
+        idx1,
+        idx2,
+        T,
+        Term,
+        D_classes,
+        equivalence_classes,
+        minimized_T,
+        class_termination,
+    )
     typer.echo(f"Distance between S{state1} and S{state2}: {D[idx1, idx2]:.3f}")
     for line in explanations:
         typer.echo(f"- {line}")
+
 
 @app.command()
 def classof(input_file: str, state: int = typer.Argument(...)):
@@ -243,11 +294,16 @@ def classof(input_file: str, state: int = typer.Argument(...)):
     R_mat = np.zeros((n, n), dtype=int)
     for x, y in R_n:
         R_mat[x, y] = 1
-    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
+    equivalence_classes, state_class_map, class_termination_status = (
+        compute_equivalence_classes(R_mat, n, Term)
+    )
     class_id = state_class_map[state - 1]
-    class_states = sorted([int(s)+1 for s in equivalence_classes[class_id]])
-    term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
-    typer.echo(f"State S{state} is in equivalence class {class_id+1}: {class_states} ({term})")
+    class_states = sorted([int(s) + 1 for s in equivalence_classes[class_id]])
+    term = "Terminating" if class_termination_status[class_id] else "Non-Terminating"
+    typer.echo(
+        f"State S{state} is in equivalence class {class_id+1}: {class_states} ({term})"
+    )
+
 
 @app.command()
 def classes(input_file: str):
@@ -267,12 +323,17 @@ def classes(input_file: str):
     R_mat = np.zeros((n, n), dtype=int)
     for x, y in R_n:
         R_mat[x, y] = 1
-    equivalence_classes, state_class_map, class_termination_status = compute_equivalence_classes(R_mat, n, Term)
+    equivalence_classes, state_class_map, class_termination_status = (
+        compute_equivalence_classes(R_mat, n, Term)
+    )
     typer.echo("Equivalence Classes:")
     for class_id, class_states in equivalence_classes.items():
-        class_states_sorted = sorted([int(s)+1 for s in class_states])
-        term = 'Terminating' if class_termination_status[class_id] else 'Non-Terminating'
+        class_states_sorted = sorted([int(s) + 1 for s in class_states])
+        term = (
+            "Terminating" if class_termination_status[class_id] else "Non-Terminating"
+        )
         typer.echo(f"  Class {class_id+1}: {class_states_sorted} ({term})")
+
 
 @app.command()
 def manual(to: str = typer.Option(..., help="Output file (internal JSON format)")):
@@ -292,9 +353,15 @@ def manual(to: str = typer.Option(..., help="Output file (internal JSON format)"
 
     # Terminating states
     for i in range(n):
-        term = typer.prompt(f"Is state {i+1} terminating? (y/n)", type=str).strip().lower()
+        term = (
+            typer.prompt(f"Is state {i+1} terminating? (y/n)", type=str).strip().lower()
+        )
         while term not in ("y", "n"):
-            term = typer.prompt(f"Please enter 'y' or 'n' for state {i+1}:", type=str).strip().lower()
+            term = (
+                typer.prompt(f"Please enter 'y' or 'n' for state {i+1}:", type=str)
+                .strip()
+                .lower()
+            )
         Term[i] = 1 if term == "y" else 0
 
     # Transitions and labels
@@ -308,7 +375,7 @@ def manual(to: str = typer.Option(..., help="Output file (internal JSON format)"
         ).strip()
         if out_str:
             try:
-                pairs = [p.strip() for p in out_str.split(',') if p.strip()]
+                pairs = [p.strip() for p in out_str.split(",") if p.strip()]
                 total_prob = 0.0
                 for pair in pairs:
                     dest, prob = pair.split()
@@ -320,11 +387,16 @@ def manual(to: str = typer.Option(..., help="Output file (internal JSON format)"
                     T[i, dest] = prob
                     total_prob += prob
                     # Optional: ask for label
-                    label = typer.prompt(f"Label for transition S{i+1}→S{dest+1} (or leave blank)", default="").strip()
+                    label = typer.prompt(
+                        f"Label for transition S{i+1}→S{dest+1} (or leave blank)",
+                        default="",
+                    ).strip()
                     if label:
                         labels[(i, dest)] = label
                 if not np.isclose(total_prob, 1.0):
-                    typer.echo(f"Warning: Probabilities from state {i+1} sum to {total_prob}, not 1.0!")
+                    typer.echo(
+                        f"Warning: Probabilities from state {i+1} sum to {total_prob}, not 1.0!"
+                    )
             except Exception as e:
                 typer.echo(f"Error parsing transitions for state {i+1}: {e}")
                 return
@@ -334,13 +406,16 @@ def manual(to: str = typer.Option(..., help="Output file (internal JSON format)"
     save_internal_json(T, Term, labels, to)
     typer.echo(f"Manual PTS entry saved to {to}")
 
+
 @app.command()
 def simulate(
     input_file: str,
     start_state: int = typer.Option(..., help="Starting state (1-based)"),
     num_simulations: int = typer.Option(100, help="Number of simulation runs"),
     max_steps: int = typer.Option(100, help="Maximum steps per run"),
-    show_runs: bool = typer.Option(False, help="Show up to 10 individual run sequences")
+    show_runs: bool = typer.Option(
+        False, help="Show up to 10 individual run sequences"
+    ),
 ):
     """
     Simulate random runs from a starting state and report statistics.
@@ -394,13 +469,14 @@ def simulate(
         typer.echo("\nSample Run Sequences (up to 10):")
         # Show up to 10 individual run sequences for inspection
         for i, run in enumerate(all_runs[:10]):
-            run_str = ' → '.join(f"S{s+1}" for s in run)
+            run_str = " → ".join(f"S{s+1}" for s in run)
             final_state = run[-1]
             if Term[final_state]:
                 run_str += " (Terminated)"
             else:
                 run_str += " (Max Steps)"
             typer.echo(f"Run {i+1}: {run_str}")
+
 
 @app.command()
 def compare_sim(
@@ -409,7 +485,9 @@ def compare_sim(
     state2: int = typer.Option(..., help="Second starting state (1-based)"),
     num_runs: int = typer.Option(20, help="Number of comparative runs"),
     max_steps: int = typer.Option(100, help="Maximum steps per run"),
-    show_runs: bool = typer.Option(False, help="Show up to 5 run sequences for each state")
+    show_runs: bool = typer.Option(
+        False, help="Show up to 5 run sequences for each state"
+    ),
 ):
     """
     Compare simulation statistics and sample runs from two different starting states.
@@ -476,7 +554,7 @@ def compare_sim(
         typer.echo(f"\nSample Run Sequences (up to 5 each):")
         # Show up to 5 individual run sequences for each initial state
         for i, run in enumerate(runs1[:5]):
-            run_str = ' → '.join(f"S{s+1}" for s in run)
+            run_str = " → ".join(f"S{s+1}" for s in run)
             final_state = run[-1]
             if Term[final_state]:
                 run_str += " (Terminated)"
@@ -484,13 +562,14 @@ def compare_sim(
                 run_str += " (Max Steps)"
             typer.echo(f"State {state1} Run {i+1}: {run_str}")
         for i, run in enumerate(runs2[:5]):
-            run_str = ' → '.join(f"S{s+1}" for s in run)
+            run_str = " → ".join(f"S{s+1}" for s in run)
             final_state = run[-1]
             if Term[final_state]:
                 run_str += " (Terminated)"
             else:
                 run_str += " (Max Steps)"
             typer.echo(f"State {state2} Run {i+1}: {run_str}")
+
 
 if __name__ == "__main__":
     app()

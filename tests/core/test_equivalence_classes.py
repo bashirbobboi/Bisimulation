@@ -2,13 +2,21 @@
 Unit tests for equivalence class computation from relation matrices.
 Covers single/disjoint/partial classes, error handling, and class properties.
 """
+
 import pytest
 import numpy as np
 from probisim.bisimdistance import compute_equivalence_classes
 
+
 def classes_to_sorted_list(classes_dict):
     """Convert dict of sets to list of sets, sorted by smallest element in each set."""
-    return [set(classes_dict[k]) for k in sorted(classes_dict, key=lambda x: min(classes_dict[x]) if classes_dict[x] else -1)]
+    return [
+        set(classes_dict[k])
+        for k in sorted(
+            classes_dict, key=lambda x: min(classes_dict[x]) if classes_dict[x] else -1
+        )
+    ]
+
 
 def test_single_class():
     """Test when all states are in the same equivalence class."""
@@ -20,6 +28,7 @@ def test_single_class():
     assert len(classes) == 1
     assert set(classes[0]) == {0, 1, 2}
 
+
 def test_invalid_shape_raises_value_error():
     """Test that an invalid relation shape raises a ValueError."""
     # Make a 2×2 matrix but tell it there are 3 states → should raise the shape error
@@ -29,10 +38,11 @@ def test_invalid_shape_raises_value_error():
         compute_equivalence_classes(R, 3, Term)
     assert "Relation matrix must be shape (3,3)" in str(exc.value)
 
+
 def test_invalid_entries_raises_value_error():
     """Test that non-binary entries in the relation raise a ValueError."""
     # A 2×2 but with a 2 in it, should trip the binary‐entry check
-    R = np.array([[1,2],[0,1]], dtype=int)
+    R = np.array([[1, 2], [0, 1]], dtype=int)
     Term = np.zeros(2, dtype=int)
     with pytest.raises(ValueError) as exc:
         compute_equivalence_classes(R, 2, Term)
@@ -51,6 +61,7 @@ def test_disjoint_classes():
     assert set(classes[1]) == {1}
     assert set(classes[2]) == {2}
 
+
 def test_partial_classes():
     """Test when some states are equivalent and others are not."""
     relation = np.array([[1, 1, 0], [1, 1, 0], [0, 0, 1]])
@@ -62,6 +73,7 @@ def test_partial_classes():
     assert set(classes[0]) == {0, 1}
     assert set(classes[1]) == {2}
 
+
 def test_empty_relation():
     """Test with an empty relation (no states)."""
     relation = np.array([])
@@ -70,6 +82,7 @@ def test_empty_relation():
     classes_dict, _, _ = compute_equivalence_classes(relation, num_states, Term)
     classes = classes_to_sorted_list(classes_dict)
     assert len(classes) == 0
+
 
 def test_single_state():
     """Test with a single state."""
@@ -80,6 +93,7 @@ def test_single_state():
     classes = classes_to_sorted_list(classes_dict)
     assert len(classes) == 1
     assert set(classes[0]) == {0}
+
 
 def test_invalid_inputs():
     """Test that invalid inputs raise appropriate errors (non-symmetric, non-reflexive, invalid values)."""
@@ -95,14 +109,10 @@ def test_invalid_inputs():
     with pytest.raises(ValueError):
         compute_equivalence_classes(np.array([[1, 2], [2, 1]]), num_states, Term)
 
+
 def test_class_properties():
     """Test that computed classes have the expected properties (disjoint, cover all states, etc)."""
-    relation = np.array([
-        [1, 1, 0, 0],
-        [1, 1, 0, 0],
-        [0, 0, 1, 1],
-        [0, 0, 1, 1]
-    ])
+    relation = np.array([[1, 1, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1], [0, 0, 1, 1]])
     num_states = 4
     Term = np.zeros(num_states, dtype=int)
     classes_dict, _, _ = compute_equivalence_classes(relation, num_states, Term)
@@ -120,26 +130,22 @@ def test_class_properties():
     for class_ in classes:
         for i in class_:
             for j in class_:
-                assert relation[i,j] == 1
+                assert relation[i, j] == 1
     # States in different classes should not be related
     for i in range(len(classes)):
         for j in range(i + 1, len(classes)):
             for state_i in classes[i]:
                 for state_j in classes[j]:
-                    assert relation[state_i,state_j] == 0
+                    assert relation[state_i, state_j] == 0
+
 
 def test_class_ordering():
     """Test that classes are ordered by their smallest element."""
-    relation = np.array([
-        [1, 1, 0, 0],
-        [1, 1, 0, 0],
-        [0, 0, 1, 1],
-        [0, 0, 1, 1]
-    ])
+    relation = np.array([[1, 1, 0, 0], [1, 1, 0, 0], [0, 0, 1, 1], [0, 0, 1, 1]])
     num_states = 4
     Term = np.zeros(num_states, dtype=int)
     classes_dict, _, _ = compute_equivalence_classes(relation, num_states, Term)
     classes = classes_to_sorted_list(classes_dict)
     # Classes should be ordered by their smallest element
     for i in range(len(classes) - 1):
-        assert min(classes[i]) < min(classes[i + 1]) 
+        assert min(classes[i]) < min(classes[i + 1])
