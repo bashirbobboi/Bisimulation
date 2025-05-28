@@ -2,29 +2,7 @@
 
 ## Installation
 
-1. Clone the repository:
-```bash
-git clone https://github.com/bashirbobboi/Bisimulation.git
-cd Bisimulation
-```
-
-2. Create and activate a virtual environment (recommended):
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
-
-> **⚠️ Important:** While you can skip this step, it's strongly recommended to use a virtual environment to:
-> - Avoid conflicts with other Python packages
-> - Ensure reproducible results
-> - Prevent system-wide package installation
-> 
-> If you skip this step, you might encounter:
-> - Package version conflicts
-> - Issues with other Python projects
-> - Difficulty reproducing results
-
-3. Install dependencies:
+1. Install dependencies:
 ```bash
 pip install -r requirements.txt
 ```
@@ -140,8 +118,9 @@ A comprehensive test suite is provided to ensure correctness, robustness, and re
      ```bash
      pip install -r requirements.txt
      ```
-  2. Run the test suite:
+  2. Run the test suite from root directory:
      ```bash
+     $env:PYTHONPATH="."
      pytest --cov=. --cov-report=term-missing
      ```
      This will show a coverage report in the terminal.

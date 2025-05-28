@@ -4,7 +4,7 @@ import pytest
 from typer.testing import CliRunner
 from pathlib import Path
 
-from probisim.cli import app
+from cli import app
 
 runner = CliRunner()
 
