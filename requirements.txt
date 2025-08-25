@@ -1,5 +1,5 @@
 # Core Dependencies
-numpy>=2.2.0
+numpy>=1.24.0,<2.0.0  # Pin to NumPy 1.x for compatibility
 typer>=0.15.4
 graphviz>=0.20.3
 matplotlib>=3.10.0
