@@ -2,10 +2,39 @@
 
 ## Installation
 
-1. Install dependencies:
-```bash
-pip install -r requirements.txt
-```
+### Quick Setup
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/bashirbobboi/Bisimulation.git
+   cd Bisimulation
+   ```
+
+2. **Create and activate a virtual environment:**
+   ```bash
+   # Create virtual environment
+   python -m venv venv
+   
+   # Activate virtual environment
+   # On macOS/Linux:
+   source venv/bin/activate
+   
+   # On Windows:
+   venv\Scripts\activate
+   ```
+
+3. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+### Requirements
+
+- Python 3.8 or higher
+- NumPy 1.24+ (automatically installed with requirements.txt)
+- Other dependencies are listed in `requirements.txt`
+
+**Note:** This project uses NumPy 1.x for compatibility with pandas and other scientific computing libraries.
 
 ## Usage
 
@@ -102,6 +131,29 @@ All commands are exposed via the `cli.py` script. Use the `--help` flag to explo
 
 **Tip:** All commands support `--help` for detailed usage and options.
 
+## Troubleshooting
+
+### Common Issues
+
+1. **NumPy compatibility errors:**
+   - This project requires NumPy 1.x for compatibility with pandas and other libraries
+   - If you encounter `AttributeError: 'np.unicode_' was removed`, make sure you're using the correct NumPy version by reinstalling requirements:
+     ```bash
+     pip install -r requirements.txt --force-reinstall
+     ```
+
+2. **Import errors:**
+   - Make sure your virtual environment is activated
+   - Ensure all dependencies are installed: `pip install -r requirements.txt`
+
+3. **Graphviz visualization issues:**
+   - Some CLI commands generate visualizations that require Graphviz
+   - Install Graphviz system package if needed (this is optional for core functionality)
+
+4. **Permission errors on Windows:**
+   - Run terminal as administrator when creating virtual environments
+   - Use `python -m venv venv` instead of `virtualenv` if available
+
 ## Testing and Coverage
 
 A comprehensive test suite is provided to ensure correctness, robustness, and reliability of the tool.
@@ -120,7 +172,15 @@ A comprehensive test suite is provided to ensure correctness, robustness, and re
      ```
   2. Run the test suite from root directory:
      ```bash
+     # On macOS/Linux:
+     PYTHONPATH=. pytest --cov=. --cov-report=term-missing
+     
+     # On Windows PowerShell:
      $env:PYTHONPATH="."
+     pytest --cov=. --cov-report=term-missing
+     
+     # On Windows Command Prompt:
+     set PYTHONPATH=.
      pytest --cov=. --cov-report=term-missing
      ```
      This will show a coverage report in the terminal.
