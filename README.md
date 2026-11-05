@@ -1,233 +1,75 @@
-# Probabilistic Bisimulation Analysis Tool
+# Probabilistic Bisimulation Tool
 
-## Installation
+My final-year dissertation at the University of Sheffield, supervised by [Dr Harsh Beohar](https://sheffield.ac.uk/cs/people/academic/harsh-beohar). It was awarded a **Distinction**.
 
-### Quick Setup
+It's a Python tool for analysing probabilistic transition systems. It finds which states behave identically, measures how different the other states are, and shrinks systems down to their smallest equivalent form. You can use it through a web interface or the command line.
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/bashirbobboi/Bisimulation.git
-   cd Bisimulation
-   ```
+![Distance analysis in the web interface](docs/screenshot.png)
 
-2. **Create and activate a virtual environment:**
-   ```bash
-   # Create virtual environment
-   python -m venv venv
-   
-   # Activate virtual environment
-   # On macOS/Linux:
-   source venv/bin/activate
-   
-   # On Windows:
-   venv\Scripts\activate
-   ```
+## The idea
 
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+A probabilistic transition system is a set of states where each move to a next state happens with some probability. These are used to model things like randomised algorithms and network protocols.
 
-### Requirements
+Two states are **bisimilar** if no one watching from the outside could tell them apart: they make the same moves with the same probabilities. That's useful, but it's all or nothing. If one probability is 0.5 and the other is 0.51, the states aren't bisimilar, even though they're almost the same.
 
-- Python 3.8 or higher
-- NumPy 1.24+ (automatically installed with requirements.txt)
-- Other dependencies are listed in `requirements.txt`
+My project computes **bisimulation distances** as well. Each pair of states gets a number between 0 (identical behaviour) and 1 (completely different). Most of the work was taking the theorems behind this from the literature and turning them into code that's correct and fast.
 
-**Note:** This project uses NumPy 1.x for compatibility with pandas and other scientific computing libraries.
+## What it does
 
-## Usage
+- **Minimisation.** Groups states into equivalence classes by partition refinement, then builds the smaller system where each class is one state.
+- **Distance matrix.** Computes the distance between every pair of states. It solves a Wasserstein (optimal transport) problem with SciPy's linear programming solver, and repeats until the values settle.
+- **Explanations.** For any two states, shows why they differ: whether one terminates and the other doesn't, and which transitions contribute most to the distance.
+- **Simulation.** Runs random walks from a state, or from two states side by side, to compare how they behave in practice.
+- **Several input formats.** PRISM models (`.pm`), JSON, and a simple text format. Parsers are pluggable, so adding a new format is one class.
 
-### Web Interface
+## How it's built
 
-Launch the Streamlit web interface:
+- **Core algorithms:** Python, NumPy, SciPy (`probisim/`)
+- **Web interface:** Streamlit, with Plotly and Seaborn for the heatmaps and charts, and Graphviz for drawing the systems (`app.py`)
+- **Command line:** Typer (`cli.py`)
+- **Tests:** 66 pytest unit and integration tests. Coverage is 98% on the core algorithms, 97% on the parsers and 96% on the CLI.
+- **Benchmarks:** timing runs on 3-, 20- and 50-state systems (`benchmarks/`)
+
+The original pseudocode for each algorithm is in `pseudocode/`.
+
+## Running it
+
+You'll need Python 3.10 or newer. Graphviz is optional, and is only used for the system diagrams.
+
+```bash
+git clone https://github.com/bashirbobboi/Bisimulation.git
+cd Bisimulation
+python -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+```
+
+**Web interface:**
+
 ```bash
 streamlit run app.py
 ```
 
-The web interface provides:
-- Interactive PTS visualization
-- Distance computation and analysis
-- State difference explanations
-- System metrics and statistics
+Then upload one of the files in `examples/`.
 
----
+**Command line:**
 
-## Command-Line Interface
+```bash
+python cli.py parse examples/knuth_die.pm prism --to die.json   # convert a model
+python cli.py classes die.json                                  # equivalence classes
+python cli.py dist die.json                                     # distance matrix
+python cli.py explain die.json 1 2                              # why states 1 and 2 differ
+python cli.py simulate die.json --start-state 1 --num-simulations 100
+```
 
-All commands are exposed via the `cli.py` script. Use the `--help` flag to explore options for each command.
+Run `python cli.py --help` to see every command.
 
-### Model Parsing and Entry
+**Tests:**
 
-- **Parse a model (to internal JSON):**
-  ```bash
-  python cli.py parse path/to/model.pm prism --to internal.json
-  ```
-  <sub>Supported formats: `prism`, `json`, `txt`</sub>
-
-- **Manual entry of a PTS:**
-  ```bash
-  python cli.py manual --to internal.json
-  ```
-  <sub>Enter a PTS interactively from the command line.</sub>
-
----
-
-### Bisimulation and Analysis
-
-- **Run bisimulation minimization and show statistics:**
-  ```bash
-  python cli.py bisim internal.json
-  ```
-
-- **Compute distance matrix and metrics:**
-  ```bash
-  python cli.py dist internal.json
-  ```
-
-- **Explain state differences:**
-  ```bash
-  python cli.py explain internal.json 1 2
-  ```
-  <sub>Explains level of similarity between state 1 and state 2 .</sub>
-
-- **Get equivalence class of a state:**
-  ```bash
-  python cli.py classof internal.json 3
-  ```
-
-- **List all equivalence classes:**
-  ```bash
-  python cli.py classes internal.json
-  ```
-
----
-
-### Simulation
-
-- **Simulate random runs from a starting state:**
-  ```bash
-  python cli.py simulate internal.json --start-state 1 --num-simulations 100 --max-steps 100 --show-runs
-  ```
-  <sub>Simulates random runs and reports statistics. `--show-runs` is optional.</sub>
-
-- **Comparative simulation from two starting states:**
-  ```bash
-  python cli.py compare-sim internal.json --state1 1 --state2 2 --num-runs 20 --max-steps 100 --show-runs
-  ```
-  <sub>Compares simulation statistics and sample runs from two different starting states.</sub>
-
----
-
-### General Help
-
-- **Show help for any command:**
-  ```bash
-  python cli.py --help
-  python cli.py <command> --help
-  ```
-
----
-
-**Tip:** All commands support `--help` for detailed usage and options.
-
-## Troubleshooting
-
-### Common Issues
-
-1. **NumPy compatibility errors:**
-   - This project requires NumPy 1.x for compatibility with pandas and other libraries
-   - If you encounter `AttributeError: 'np.unicode_' was removed`, make sure you're using the correct NumPy version by reinstalling requirements:
-     ```bash
-     pip install -r requirements.txt --force-reinstall
-     ```
-
-2. **Import errors:**
-   - Make sure your virtual environment is activated
-   - Ensure all dependencies are installed: `pip install -r requirements.txt`
-
-3. **Graphviz visualization issues:**
-   - Some CLI commands generate visualizations that require Graphviz
-   - Install Graphviz system package if needed (this is optional for core functionality)
-
-4. **Permission errors on Windows:**
-   - Run terminal as administrator when creating virtual environments
-   - Use `python -m venv venv` instead of `virtualenv` if available
-
-## Testing and Coverage
-
-A comprehensive test suite is provided to ensure correctness, robustness, and reliability of the tool.
-
-- **Test Coverage:**
-  - Achieved **over 90% coverage** on all files related to the core logic (including bisimulation distance, minimization, equivalence classes, simulation, and metrics).
-  - Tests cover core algorithms, parsers, Wasserstein distance, refinement, equivalence classes, simulation, state difference explanations, minimization, CLI, Streamlit app, visualization, and metrics.
-
-- **Testing Frameworks:**
-  - [pytest](https://docs.pytest.org/): For unit and integration tests
-
-- **How to Run Tests:**
-  1. Make sure all dependencies are installed:
-     ```bash
-     pip install -r requirements.txt
-     ```
-  2. Run the test suite from root directory:
-     ```bash
-     # On macOS/Linux:
-     PYTHONPATH=. pytest --cov=. --cov-report=term-missing
-     
-     # On Windows PowerShell:
-     $env:PYTHONPATH="."
-     pytest --cov=. --cov-report=term-missing
-     
-     # On Windows Command Prompt:
-     set PYTHONPATH=.
-     pytest --cov=. --cov-report=term-missing
-     ```
-     This will show a coverage report in the terminal.
-
-- **Test Organization:**
-  - Tests are organized by module in the `tests/` directory (e.g., `tests/core/`, `tests/app/`, `tests/cli/`, `tests/utils/`, `tests/parsers/`).
-  - Each test file includes clear docstrings and comments for clarity and reproducibility.
-
-## Theoretical Background
-
-### Bisimulation Distance
-
-The tool implements a metric for quantifying behavioral similarity between states in a PTS. The distance is computed iteratively using the following algorithm:
-
-1. **Initialization**
-   - Set initial distances based on termination status
-   - For states with different termination status: distance = 1
-   - For states with same termination status: distance = 0
-
-2. **Iterative Refinement**
-   - For each pair of states (x, y):
-     - Compute Wasserstein distance between their transition distributions
-     - Use current distances as ground costs
-   - Repeat until convergence
-
-3. **Convergence**
-   - The algorithm converges to a fixed point
-   - The resulting distance matrix satisfies the triangle inequality
-   - Distance of 0 indicates bisimilar states
-
-### Implementation Details
-
-- **Core Components**
-  - `bisimdistance.py`: Core algorithms for distance computation
-  - `parsers.py`: Pluggable parser system for different input formats
-  - `cli.py`: Command-line interface using Typer
-  - `app.py`: Streamlit web interface
-
-- **Testing**
-  - Comprehensive test suite with >90% coverage
-  - Property-based testing using Hypothesis
-  - Unit tests for all core components
-  - Integration tests for CLI and web interface
+```bash
+PYTHONPATH=. pytest --cov=probisim --cov=cli
+```
 
 ## Author
 
-Mohammed BA Bobboi
-The University of Sheffield
-Grade: Distinction / First Class
-
+Mohammed Bashir Bobboi: [bashir.is-a.dev](https://bashir.is-a.dev)
